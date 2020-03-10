@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/ledger"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
-	"github.com/hyperledger/fabric-sdk-go/pkg/client/resmgmt"
-	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
-	pmsp "github.com/hyperledger/fabric-sdk-go/pkg/common/providers/msp"
-	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
-	"github.com/hyperledger/fabric-sdk-go/pkg/core/cryptosuite"
-	"github.com/hyperledger/fabric-sdk-go/pkg/fab/ccpackager/gopackager"
-	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
-	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/common/cauthdsl"
+	"github.com/palletone/fabric-adaptor/pkg/client/channel"
+	"github.com/palletone/fabric-adaptor/pkg/client/ledger"
+	"github.com/palletone/fabric-adaptor/pkg/client/msp"
+	"github.com/palletone/fabric-adaptor/pkg/client/resmgmt"
+	"github.com/palletone/fabric-adaptor/pkg/common/providers/fab"
+	pmsp "github.com/palletone/fabric-adaptor/pkg/common/providers/msp"
+	"github.com/palletone/fabric-adaptor/pkg/core/config"
+	"github.com/palletone/fabric-adaptor/pkg/core/cryptosuite"
+	"github.com/palletone/fabric-adaptor/pkg/fab/ccpackager/gopackager"
+	"github.com/palletone/fabric-adaptor/pkg/fabsdk"
+	"github.com/palletone/fabric-adaptor/third_party/github.com/hyperledger/fabric/common/cauthdsl"
 
 	cb "github.com/hyperledger/fabric-protos-go/common"
 
@@ -583,6 +583,11 @@ func (afab *AdaptorFabric) GetContractInvokeTx(input *adaptor.GetContractInvokeT
 	} else {
 		output.IsSuccess = false
 	}
+	output.UpdateStateSuccess = output.IsSuccess//todo
+	if nil != rsp.TransactionEnvelope {
+		output.InvokeResult = rsp.TransactionEnvelope.Payload
+	}
+
 	return &output, nil
 }
 
