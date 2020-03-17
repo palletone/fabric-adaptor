@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/palletone/fabric-adaptor/pkg/context"
 	"os"
 
 	"github.com/palletone/fabric-adaptor/pkg/client/channel"
@@ -35,6 +36,8 @@ import (
 	"github.com/palletone/fabric-adaptor/pkg/fab/ccpackager/gopackager"
 	"github.com/palletone/fabric-adaptor/pkg/fabsdk"
 	"github.com/palletone/fabric-adaptor/third_party/github.com/hyperledger/fabric/common/cauthdsl"
+
+	"github.com/palletone/fabric-adaptor/pkg/fab/txn"
 
 	cb "github.com/hyperledger/fabric-protos-go/common"
 
@@ -285,7 +288,101 @@ func (afab *AdaptorFabric) VerifySignature(input *adaptor.VerifySignatureInput) 
 //对一条交易进行签名，并返回签名结果
 func (afab *AdaptorFabric) SignTransaction(input *adaptor.SignTransactionInput) (
 	*adaptor.SignTransactionOutput, error) {
-	return nil, errors.New("not implement")
+	txType := string(input.Extra)
+	if "" != txType {
+		switch txType {
+		case "proposal":
+			clientContext, err := getClientContext(afab)
+			if err != nil {
+				return nil, err
+			}
+			ctx, _ := context.NewRequest(clientContext)
+			var proposal fab.TransactionProposal
+			err = json.Unmarshal(input.Transaction, &proposal)
+			if err != nil {
+				return nil, err
+			}
+			processProposalRequest, err := txn.SignProposal(ctx, &proposal)
+			if err != nil {
+				fmt.Println("txn.SignProposal", err.Error())
+				return nil, err
+			}
+
+			resultJSON, err := json.Marshal(*processProposalRequest)
+			if err != nil {
+				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
+				return nil, err
+			}
+
+			var output adaptor.SignTransactionOutput
+			output.SignedTx = resultJSON
+			return &output, nil
+
+		case "inittx":
+			err := InitSDK(afab)
+			if err != nil {
+				return nil, err
+			}
+			err = InitResmgmt(afab)
+			if err != nil {
+				return nil, err
+			}
+
+			var tx fab.Transaction
+			err = json.Unmarshal(input.Transaction, &tx)
+			if err != nil {
+				return nil, err
+			}
+			processTxRequest, err := afab.ResClient.InstantiateCCSignFirstZxl(afab.ChannelID, &tx)
+			if err != nil {
+				fmt.Println("ResClient.Broadcast", err.Error())
+				return nil, err
+			}
+
+			resultJSON, err := json.Marshal(*processTxRequest)
+			if err != nil {
+				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
+				return nil, err
+			}
+
+			var output adaptor.SignTransactionOutput
+			output.SignedTx = resultJSON
+			return &output, nil
+		case "invoketx":
+			err := InitSDK(afab)
+			if err != nil {
+				return nil, err
+			}
+			err = InitChannel(afab)
+			if err != nil {
+				return nil, err
+			}
+
+			var tx fab.Transaction
+			err = json.Unmarshal(input.Transaction, &tx)
+			if err != nil {
+				return nil, err
+			}
+			req := channel.Request{
+				Tx: &tx,
+			}
+			resp, err := afab.ChannelClient.ExecuteSignFirstZxl(req)
+			if err != nil {
+				fmt.Println("ResClient.Broadcast", err.Error())
+				return nil, err
+			}
+			resultJSON, err := json.Marshal(*resp.ProcessTxReq)
+			if err != nil {
+				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
+				return nil, err
+			}
+
+			var output adaptor.SignTransactionOutput
+			output.SignedTx = resultJSON
+			return &output, nil
+		}
+	}
+	return nil, fmt.Errorf("invalid extra")
 }
 
 //将未签名的原始交易与签名进行绑定，返回一个签名后的交易
@@ -302,7 +399,123 @@ func (afab *AdaptorFabric) CalcTxHash(input *adaptor.CalcTxHashInput) (*adaptor.
 
 //将签名后的交易广播到网络中,如果发送交易需要手续费，指定最多支付的手续费
 func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) (*adaptor.SendTransactionOutput, error) {
-	return nil, errors.New("not implement")
+	err := InitSDK(afab)
+	if err != nil {
+		return nil, err
+	}
+	err = InitResmgmt(afab)
+	if err != nil {
+		return nil, err
+	}
+
+
+	txType := string(input.Extra)
+	if "" != txType {
+		switch txType {
+		case "install":
+			var processProposalRequest fab.ProcessProposalRequest
+			err = json.Unmarshal(input.Transaction, &processProposalRequest)
+			if err != nil {
+				return nil, err
+			}
+			result, txID, err := afab.ResClient.InstallCCBroadcastZxl(&processProposalRequest)
+			if err != nil {
+				fmt.Println("ResClient.Broadcast", err.Error())
+				return nil, err
+			}
+			//fmt.Println(len(rspArr))
+			fmt.Println(result)
+			fmt.Println("SendTransaction return", txID)
+
+			var output adaptor.SendTransactionOutput // todo
+			output.TxID = []byte(txID)
+			return &output, nil
+		case "init1":
+			var processProposalRequest fab.ProcessProposalRequest
+			err = json.Unmarshal(input.Transaction, &processProposalRequest)
+			if err != nil {
+				return nil, err
+			}
+			tx, err := afab.ResClient.InstantiateCCBroadcastFirstZxl(afab.ChannelID, &processProposalRequest)
+			if err != nil {
+				fmt.Println("ResClient.Broadcast", err.Error())
+				return nil, err
+			}
+			resultJSON, err := json.Marshal(*tx)
+			if err != nil {
+				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
+				return nil, err
+			}
+			var output adaptor.SendTransactionOutput // todo
+			output.Extra = resultJSON
+			return &output,nil
+		case "init2":
+			var processTxReq fab.ProcessTransactionRequest
+			err = json.Unmarshal(input.Transaction, &processTxReq)
+			if err != nil {
+				return nil, err
+			}
+			txID, err := afab.ResClient.InstantiateCCBroadcastSecondZxl(afab.ChannelID, &processTxReq)
+			if err != nil {
+				fmt.Println("ResClient.Broadcast", err.Error())
+				return nil, err
+			}
+			var output adaptor.SendTransactionOutput // todo
+			output.TxID = []byte(txID)
+			return &output,nil
+		case "invoke1":
+			err = InitChannel(afab)
+			if err != nil {
+				return nil, err
+			}
+			var processProposalRequest fab.ProcessProposalRequest
+			err = json.Unmarshal(input.Transaction, &processProposalRequest)
+			if err != nil {
+				return nil, err
+			}
+			//写入之前,要创建请求:
+			req := channel.Request{
+				ProposalReq: &processProposalRequest,
+			}
+			resp, err := afab.ChannelClient.ExecuteBrocadcastFirstZxl(req)
+			if err != nil {
+				fmt.Println("ResClient.Broadcast", err.Error())
+				return nil, err
+			}
+			resultJSON, err := json.Marshal(*resp.Tx)
+			if err != nil {
+				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
+				return nil, err
+			}
+			var output adaptor.SendTransactionOutput // todo
+			output.Extra = resultJSON
+			return &output,nil
+		case "invoke2":
+			err = InitChannel(afab)
+			if err != nil {
+				return nil, err
+			}
+			var processTxReq fab.ProcessTransactionRequest
+			err = json.Unmarshal(input.Transaction, &processTxReq)
+			if err != nil {
+				return nil, err
+			}
+			//写入之前,要创建请求:
+			req := channel.Request{
+				ProcessTxReq: &processTxReq,
+			}
+			resp, err := afab.ChannelClient.ExecuteBrocadcastSecondZxl(req)
+			if err != nil {
+				fmt.Println("ResClient.Broadcast", err.Error())
+				return nil, err
+			}
+			var output adaptor.SendTransactionOutput // todo
+			output.TxID = []byte(resp.TransactionID)
+			return &output,nil
+		}
+	}
+
+	return nil, fmt.Errorf("invalid extra")
 }
 
 //根据交易ID获得交易的基本信息
@@ -442,18 +655,23 @@ func (afab *AdaptorFabric) CreateContractInstallTx(input *adaptor.CreateContract
 		Package:ccp,
 	}
 	//安装链码
-	rspArr, err := afab.ResClient.InstallCC(installCCRequest)
+	//result, err := afab.ResClient.InstallCC(installCCRequest)
+	result, err := afab.ResClient.InstallCCZxl(installCCRequest)
 	if err != nil {
 		fmt.Println("ResClient.InstallCC", err.Error())
 		return nil, err
 	}
-	fmt.Println("449")
-	fmt.Println(len(rspArr))
-	fmt.Println(rspArr)
-	fmt.Println("InstallCC success")
+	//fmt.Println(len(rspArr))
+	fmt.Println(result)
+	fmt.Println("InstallCC return", result.TxnID)
 
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		fmt.Println("json.Marshal(result)", err.Error())
+		return nil, err
+	}
 	var output adaptor.CreateContractInstallTxOutput // todo
-	//output.RawTransaction
+	output.RawTransaction = resultJSON
 	return &output, nil
 }
 
@@ -491,15 +709,22 @@ func (afab *AdaptorFabric) CreateContractInitialTx(input *adaptor.CreateContract
 	}
 
 	//实例化链码
-	resp,err := afab.ResClient.InstantiateCC(afab.ChannelID, req)
+	//result,err := afab.ResClient.InstantiateCC(afab.ChannelID, req)
+	result,err := afab.ResClient.InstantiateCCCreateInitZxl(afab.ChannelID, req)
 	if err != nil {
 		fmt.Println("resClient.InstantiateCC",err.Error())
 		return nil, err
 	}
-	fmt.Println(resp.TransactionID)
+	//fmt.Println("InstantiateCC return", result.TransactionID)
+	fmt.Println("InstantiateCC return", result.TxnID)
 
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		fmt.Println("json.Marshal(result)", err.Error())
+		return nil, err
+	}
 	var output adaptor.CreateContractInitialTxOutput // todo
-	//output.RawTransaction
+	output.RawTransaction = resultJSON
 	return &output,nil
 }
 
@@ -529,14 +754,24 @@ func (afab *AdaptorFabric) CreateContractInvokeTx(input *adaptor.CreateContractI
 
 	//pmsp.Context().SigningManager().Sign()
 	//使用 pkg/client/channel/chclient.go 中的 Execute()方法,来进行数据写入的操作:
-	rsp, err := afab.ChannelClient.Execute(req)
+	//rsp, err := afab.ChannelClient.Execute(req)
+	rsp, err := afab.ChannelClient.ExecuteZxl(req)
 	if err != nil {
 		fmt.Println(err.Error())
 		return nil, err
 	}
-	fmt.Println(rsp.TransactionID)
+	fmt.Println("Execute retrun", rsp.TransactionID)
+
+	if nil == rsp.Proposal {
+		return nil, fmt.Errorf("CreateContractInvokeTx failed")
+	}
+	resultJSON, err := json.Marshal(rsp.Proposal)
+	if err != nil {
+		fmt.Println("json.Marshal(result)", err.Error())
+		return nil, err
+	}
 	var output adaptor.CreateContractInvokeTxOutput // todo
-	//output.RawTransaction
+	output.RawTransaction = resultJSON
 	return &output, nil
 }
 

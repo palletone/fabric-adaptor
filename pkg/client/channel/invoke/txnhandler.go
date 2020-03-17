@@ -9,6 +9,8 @@ package invoke
 import (
 	"bytes"
 
+	"github.com/golang/protobuf/proto"
+
 	"github.com/palletone/fabric-adaptor/pkg/common/errors/status"
 	"github.com/palletone/fabric-adaptor/pkg/common/options"
 	"github.com/pkg/errors"
@@ -62,7 +64,104 @@ func (e *EndorsementHandler) Handle(requestContext *RequestContext, clientContex
 
 	requestContext.Response.Responses = transactionProposalResponses
 	if len(transactionProposalResponses) > 0 {
-		requestContext.Response.Payload = transactionProposalResponses[0].ProposalResponse.GetResponse().Payload
+		requestContext.Response.Payload =
+			transactionProposalResponses[0].ProposalResponse.GetResponse().Payload
+		requestContext.Response.ChaincodeStatus = transactionProposalResponses[0].ChaincodeStatus
+	}
+
+	//Delegate to next step if any
+	if e.next != nil {
+		e.next.Handle(requestContext, clientContext)
+	}
+}
+
+//EndorsementHandler for handling endorse transactions
+type EndorsementHandlerZxl struct {
+	next               Handler
+	headerOptsProvider TxnHeaderOptsProvider
+}
+
+//NewEndorsementHandler returns a handler that endorses a transaction proposal
+func NewEndorsementHandlerZxl(next ...Handler) *EndorsementHandlerZxl {//Zxl add
+	return &EndorsementHandlerZxl{next: getNext(next)}
+}
+//Handle for endorsing transactions
+func (e *EndorsementHandlerZxl) Handle(requestContext *RequestContext, clientContext *ClientContext) {
+
+	// Endorse Tx
+	var TxnHeaderOpts []fab.TxnHeaderOpt
+	if e.headerOptsProvider != nil {
+		TxnHeaderOpts = e.headerOptsProvider()
+	}
+
+	proposal, err := createTransactionProposal(
+		clientContext.Transactor,
+		&requestContext.Request,
+		TxnHeaderOpts...,
+	)
+
+	requestContext.Response.Proposal = proposal
+	requestContext.Response.TransactionID = proposal.TxnID // TODO: still needed?
+
+	if err != nil {
+		requestContext.Error = err
+		return
+	}
+
+	//Delegate to next step if any
+	if e.next != nil {
+		e.next.Handle(requestContext, clientContext)
+	}
+}
+
+//EndorsementHandler for handling endorse transactions
+type EndorsementHandlerBroadcastZxl struct {
+	next               Handler
+	headerOptsProvider TxnHeaderOptsProvider
+}
+
+//NewEndorsementHandler returns a handler that endorses a transaction proposal
+func NewEndorsementHandlerBroadcastZxl(next ...Handler) *EndorsementHandlerBroadcastZxl {//Zxl add
+	return &EndorsementHandlerBroadcastZxl{next: getNext(next)}
+}
+//Handle for endorsing transactions
+func (e *EndorsementHandlerBroadcastZxl) Handle(requestContext *RequestContext,
+	clientContext *ClientContext) {
+
+	// Endorse Tx
+	var TxnHeaderOpts []fab.TxnHeaderOpt
+	if e.headerOptsProvider != nil {
+		TxnHeaderOpts = e.headerOptsProvider()
+	}
+
+	proposalReq := requestContext.Request.ProposalReq//第一次广播
+	transactionProposalResponses, err := sendTransactionProposal(
+		clientContext.Transactor,
+		proposalReq,
+		peer.PeersToTxnProcessors(requestContext.Opts.Targets),
+		TxnHeaderOpts...,
+	)
+
+	if err != nil {
+		requestContext.Error = err
+		return
+	}
+
+	var proposal pb.Proposal
+	err = proto.Unmarshal(proposalReq.SignedProposal.ProposalBytes, &proposal)//Zxl todo
+	if err != nil {
+		requestContext.Error = err
+		return
+	}
+	requestContext.Response.Proposal = &fab.TransactionProposal{
+		TxnID:proposalReq.TxID,
+		Proposal:&proposal}
+	requestContext.Response.TransactionID = proposalReq.TxID // TODO: still needed?
+
+	requestContext.Response.Responses = transactionProposalResponses
+	if len(transactionProposalResponses) > 0 {
+		requestContext.Response.Payload =
+			transactionProposalResponses[0].ProposalResponse.GetResponse().Payload
 		requestContext.Response.ChaincodeStatus = transactionProposalResponses[0].ChaincodeStatus
 	}
 
@@ -121,7 +220,8 @@ type EndorsementValidationHandler struct {
 }
 
 //Handle for Filtering proposal response
-func (f *EndorsementValidationHandler) Handle(requestContext *RequestContext, clientContext *ClientContext) {
+func (f *EndorsementValidationHandler) Handle(requestContext *RequestContext,
+	clientContext *ClientContext) {
 
 	//Filter tx proposal responses
 	err := f.validate(requestContext.Response.Responses)
@@ -136,11 +236,13 @@ func (f *EndorsementValidationHandler) Handle(requestContext *RequestContext, cl
 	}
 }
 
-func (f *EndorsementValidationHandler) validate(txProposalResponse []*fab.TransactionProposalResponse) error {
+func (f *EndorsementValidationHandler) validate(
+	txProposalResponse []*fab.TransactionProposalResponse) error {
 	var a1 *pb.ProposalResponse
 	for n, r := range txProposalResponse {
 		response := r.ProposalResponse.GetResponse()
-		if response.Status < int32(common.Status_SUCCESS) || response.Status >= int32(common.Status_BAD_REQUEST) {
+		if response.Status < int32(common.Status_SUCCESS) ||
+			response.Status >= int32(common.Status_BAD_REQUEST) {
 			return status.NewFromProposalResponse(r.ProposalResponse, r.Endorser)
 		}
 		if n == 0 {
@@ -175,7 +277,8 @@ func (c *CommitTxHandler) Handle(requestContext *RequestContext, clientContext *
 	}
 	defer clientContext.EventService.Unregister(reg)
 
-	_, err = createAndSendTransaction(clientContext.Transactor, requestContext.Response.Proposal, requestContext.Response.Responses)
+	_, err = createAndSendTransaction(clientContext.Transactor, requestContext.Response.Proposal,
+		requestContext.Response.Responses)
 	if err != nil {
 		requestContext.Error = errors.Wrap(err, "CreateAndSendTransaction failed")
 		return
@@ -186,8 +289,8 @@ func (c *CommitTxHandler) Handle(requestContext *RequestContext, clientContext *
 		requestContext.Response.TxValidationCode = txStatus.TxValidationCode
 
 		if txStatus.TxValidationCode != pb.TxValidationCode_VALID {
-			requestContext.Error = status.New(status.EventServerStatus, int32(txStatus.TxValidationCode),
-				"received invalid transaction", nil)
+			requestContext.Error = status.New(status.EventServerStatus,
+				int32(txStatus.TxValidationCode), "received invalid transaction", nil)
 			return
 		}
 	case <-requestContext.Ctx.Done():
@@ -201,6 +304,97 @@ func (c *CommitTxHandler) Handle(requestContext *RequestContext, clientContext *
 		c.next.Handle(requestContext, clientContext)
 	}
 }
+
+//CommitTxHandler for committing transactions create
+type CommitTxCreateHandler struct {
+	next Handler
+}
+
+//Handle handles commit tx
+func (c *CommitTxCreateHandler) Handle(requestContext *RequestContext, clientContext *ClientContext) {
+	tx, err := createTransaction(clientContext.Transactor, requestContext.Response.Proposal,
+		requestContext.Response.Responses)
+	if err != nil {
+		requestContext.Error = errors.Wrap(err, "CreateAndSendTransaction failed")
+		return
+	}
+	requestContext.Response.Tx = tx
+
+	//Delegate to next step if any
+	if c.next != nil {
+		c.next.Handle(requestContext, clientContext)
+	}
+}
+
+//CommitTxSignHandler for committing transactions sign
+type CommitTxSignHandler struct {
+	next Handler
+}
+
+//Handle handles commit tx
+func (c *CommitTxSignHandler) Handle(requestContext *RequestContext, clientContext *ClientContext) {
+	signedEnvelope, err := signTransaction(clientContext.Transactor, requestContext.Request.Tx)
+	if err != nil {
+		requestContext.Error = errors.Wrap(err, "CreateAndSendTransaction failed")
+		return
+	}
+	requestContext.Response.ProcessTxReq = &fab.ProcessTransactionRequest{
+		TxSignedEnvelope:signedEnvelope, TxID:requestContext.Request.Tx.Proposal.TxnID}
+
+	//Delegate to next step if any
+	if c.next != nil {
+		c.next.Handle(requestContext, clientContext)
+	}
+}
+
+//CommitTxHandler for committing transactions send
+type CommitTxSendHandler struct {
+	next Handler
+}
+
+//Handle handles commit tx
+func (c *CommitTxSendHandler) Handle(requestContext *RequestContext, clientContext *ClientContext) {
+	processTxReq := requestContext.Request.ProcessTxReq
+
+	txnID := processTxReq.TxID
+
+	//Register Tx event
+	reg, statusNotifier, err := clientContext.EventService.RegisterTxStatusEvent(string(txnID)) // TODO: Change func to use TransactionID instead of string
+	if err != nil {
+		requestContext.Error = errors.Wrap(err, "error registering for TxStatus event")
+		return
+	}
+	defer clientContext.EventService.Unregister(reg)
+
+	_, err = sendTransaction(clientContext.Transactor, processTxReq.TxSignedEnvelope,
+		requestContext.Response.Responses)
+	if err != nil {
+		requestContext.Error = errors.Wrap(err, "CreateAndSendTransaction failed")
+		return
+	}
+	requestContext.Response.TransactionID = txnID
+
+	select {
+	case txStatus := <-statusNotifier:
+		requestContext.Response.TxValidationCode = txStatus.TxValidationCode
+
+		if txStatus.TxValidationCode != pb.TxValidationCode_VALID {
+			requestContext.Error = status.New(status.EventServerStatus,
+				int32(txStatus.TxValidationCode), "received invalid transaction", nil)
+			return
+		}
+	case <-requestContext.Ctx.Done():
+		requestContext.Error = status.New(status.ClientStatus, status.Timeout.ToInt32(),
+			"Execute didn't receive block event", nil)
+		return
+	}
+
+	//Delegate to next step if any
+	if c.next != nil {
+		c.next.Handle(requestContext, clientContext)
+	}
+}
+
 
 //NewQueryHandler returns query handler with chain of ProposalProcessorHandler, EndorsementHandler, EndorsementValidationHandler and SignatureValidationHandler
 func NewQueryHandler(next ...Handler) Handler {
@@ -222,6 +416,16 @@ func NewExecuteHandler(next ...Handler) Handler {
 	)
 }
 
+func NewExecuteBroadcastFirstHandler(next ...Handler) Handler {
+	return NewEndorsementHandlerBroadcastZxl(
+		NewEndorsementValidationHandler(
+			NewSignatureValidationHandler(NewCommitTxCreateHandler(next...)),
+		),
+	)
+}
+func NewExecuteBroadcastSecondHandler(next ...Handler) Handler {
+	return NewCommitTxSendHandler(next...)
+}
 //NewProposalProcessorHandler returns a handler that selects proposal processors
 func NewProposalProcessorHandler(next ...Handler) *ProposalProcessorHandler {
 	return &ProposalProcessorHandler{next: getNext(next)}
@@ -247,6 +451,16 @@ func NewCommitHandler(next ...Handler) *CommitTxHandler {
 	return &CommitTxHandler{next: getNext(next)}
 }
 
+func NewCommitTxCreateHandler(next ...Handler) *CommitTxCreateHandler {
+	return &CommitTxCreateHandler{next: getNext(next)}
+}
+func NewCommitTxSignHandler(next ...Handler) *CommitTxSignHandler {
+	return &CommitTxSignHandler{next: getNext(next)}
+}
+func NewCommitTxSendHandler(next ...Handler) *CommitTxSendHandler {
+	return &CommitTxSendHandler{next: getNext(next)}
+}
+
 func getNext(next []Handler) Handler {
 	if len(next) > 0 {
 		return next[0]
@@ -254,7 +468,8 @@ func getNext(next []Handler) Handler {
 	return nil
 }
 
-func createAndSendTransaction(sender fab.Sender, proposal *fab.TransactionProposal, resps []*fab.TransactionProposalResponse) (*fab.TransactionResponse, error) {
+func createAndSendTransaction(sender fab.Sender, proposal *fab.TransactionProposal,
+	resps []*fab.TransactionProposalResponse) (*fab.TransactionResponse, error) {
 
 	txnRequest := fab.TransactionRequest{
 		Proposal:          proposal,
@@ -275,7 +490,44 @@ func createAndSendTransaction(sender fab.Sender, proposal *fab.TransactionPropos
 	return transactionResponse, nil
 }
 
-func createAndSendTransactionProposal(transactor fab.ProposalSender, chrequest *Request, targets []fab.ProposalProcessor, opts ...fab.TxnHeaderOpt) ([]*fab.TransactionProposalResponse, *fab.TransactionProposal, error) {
+func createTransaction(sender fab.Sender, proposal *fab.TransactionProposal,
+	resps []*fab.TransactionProposalResponse) (*fab.Transaction, error) {//Zxl add
+
+	txnRequest := fab.TransactionRequest{
+		Proposal:          proposal,
+		ProposalResponses: resps,
+	}
+
+	tx, err := sender.CreateTransaction(txnRequest)
+	if err != nil {
+		return nil, errors.WithMessage(err, "CreateTransaction failed")
+	}
+
+	return tx, nil
+}
+
+func signTransaction(sender fab.Sender, tx *fab.Transaction) (*fab.SignedEnvelope, error) {//Zxl add
+	envelope, err := sender.SignTransactionZxl(tx)
+	if err != nil {
+		return nil, errors.WithMessage(err, "CreateTransaction failed")
+	}
+
+	return envelope, nil
+}
+
+func sendTransaction(sender fab.Sender, envelope *fab.SignedEnvelope,
+	resps []*fab.TransactionProposalResponse) (*fab.TransactionResponse, error) {//Zxl add
+	transactionResponse, err := sender.SendTransactionZxl(envelope)
+	if err != nil {
+		return nil, errors.WithMessage(err, "SendTransaction failed")
+	}
+
+	return transactionResponse, nil
+}
+
+func createAndSendTransactionProposal(transactor fab.ProposalSender, chrequest *Request,
+	targets []fab.ProposalProcessor, opts ...fab.TxnHeaderOpt) ([]*fab.TransactionProposalResponse,
+	*fab.TransactionProposal, error) {
 	request := fab.ChaincodeInvokeRequest{
 		ChaincodeID:  chrequest.ChaincodeID,
 		Fcn:          chrequest.Fcn,
@@ -296,4 +548,34 @@ func createAndSendTransactionProposal(transactor fab.ProposalSender, chrequest *
 	transactionProposalResponses, err := transactor.SendTransactionProposal(proposal, targets)
 
 	return transactionProposalResponses, proposal, err
+}
+
+func sendTransactionProposal(transactor fab.ProposalSender, req *fab.ProcessProposalRequest,
+	targets []fab.ProposalProcessor, opts ...fab.TxnHeaderOpt) ([]*fab.TransactionProposalResponse,
+	error) {//Zxl add
+	transactionProposalResponses, err := transactor.SendTransactionProposalZxl(req, targets)
+
+	return transactionProposalResponses, err
+}
+
+func createTransactionProposal(transactor fab.ProposalSender, chrequest *Request,
+	opts ...fab.TxnHeaderOpt) (*fab.TransactionProposal, error) {//Zxl add
+	request := fab.ChaincodeInvokeRequest{
+		ChaincodeID:  chrequest.ChaincodeID,
+		Fcn:          chrequest.Fcn,
+		Args:         chrequest.Args,
+		TransientMap: chrequest.TransientMap,
+	}
+
+	txh, err := transactor.CreateTransactionHeader(opts...)
+	if err != nil {
+		return nil, errors.WithMessage(err, "creating transaction header failed")
+	}
+
+	proposal, err := txn.CreateChaincodeInvokeProposal(txh, request)
+	if err != nil {
+		return nil, errors.WithMessage(err, "creating transaction proposal failed")
+	}
+
+	return proposal, err
 }

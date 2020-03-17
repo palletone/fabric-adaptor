@@ -41,6 +41,11 @@ type Request struct {
 	Args         [][]byte
 	TransientMap map[string][]byte
 
+	ProposalReq *fab.ProcessProposalRequest //Zxl add 用户对合约调用的签名【用于第一次广播】
+
+	Tx              *fab.Transaction //Zxl add 合约调用第一次发送后的结果【用于请求用户对proposal的签名】
+	ProcessTxReq    *fab.ProcessTransactionRequest //Zxl add 合约调用对第一次发送结果的签名【用于第二次广播】
+
 	// InvocationChain contains meta-data that's used by some Selection Service implementations
 	// to choose endorsers that satisfy the endorsement policies of all chaincodes involved
 	// in an invocation chain (i.e. for CC-to-CC invocations).
@@ -57,6 +62,10 @@ type Response struct {
 	Proposal         *fab.TransactionProposal
 	Responses        []*fab.TransactionProposalResponse
 	TransactionID    fab.TransactionID
+
+	Tx              *fab.Transaction //Zxl add 合约调用第一次发送后的结果【保存广播结果，用于下一步用户签名】
+	ProcessTxReq    *fab.ProcessTransactionRequest //Zxl add 合约调用对第一次发送结果的签名【用于第二次广播】
+
 	TxValidationCode pb.TxValidationCode
 	ChaincodeStatus  int32
 	Payload          []byte

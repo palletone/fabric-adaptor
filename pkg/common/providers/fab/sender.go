@@ -22,6 +22,8 @@ type TransactionRequest struct {
 type Sender interface {
 	CreateTransaction(request TransactionRequest) (*Transaction, error)
 	SendTransaction(tx *Transaction) (*TransactionResponse, error)
+	SignTransactionZxl(tx *Transaction) (*SignedEnvelope, error)//Zxl add
+	SendTransactionZxl(envelope *SignedEnvelope) (*TransactionResponse, error)//Zxl add
 }
 
 // The Transaction object created from an endorsed proposal.

@@ -9,6 +9,7 @@ package resource
 
 import (
 	reqContext "context"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -316,7 +317,9 @@ func QueryInstalledChaincodes(reqCtx reqContext.Context, peer fab.ProposalProces
 }
 
 // InstallChaincode sends an install proposal to one or more endorsing peers.
-func InstallChaincode(reqCtx reqContext.Context, req InstallChaincodeRequest, targets []fab.ProposalProcessor, opts ...Opt) ([]*fab.TransactionProposalResponse, fab.TransactionID, error) {
+func InstallChaincode(reqCtx reqContext.Context, req InstallChaincodeRequest,
+	targets []fab.ProposalProcessor, opts ...Opt) ([]*fab.TransactionProposalResponse,
+	fab.TransactionID, error) {
 
 	if req.Name == "" {
 		return nil, fab.EmptyTransactionID, errors.New("chaincode name required")
@@ -369,8 +372,72 @@ func InstallChaincode(reqCtx reqContext.Context, req InstallChaincodeRequest, ta
 
 	return resp.([]*fab.TransactionProposalResponse), prop.TxnID, nil
 }
+func InstallChaincodeBroadcastZxl(reqCtx reqContext.Context, req *fab.ProcessProposalRequest,
+	targets []fab.ProposalProcessor, opts ...Opt) ([]*fab.TransactionProposalResponse,
+	fab.TransactionID, error) {//Zxl add
+	optionsValue := getOpts(opts...)
 
-func queryChaincodeWithTarget(reqCtx reqContext.Context, request fab.ChaincodeInvokeRequest, target fab.ProposalProcessor, opts options) ([]byte, error) {
+	resp, err := retry.NewInvoker(retry.New(optionsValue.retry)).Invoke(
+		func() (interface{}, error) {
+			return txn.SendProposalZxl(reqCtx, req, targets)
+		},
+	)
+	if err != nil {
+		return nil, fab.EmptyTransactionID, err
+	}
+
+	return resp.([]*fab.TransactionProposalResponse), req.TxID, nil
+}
+
+func InstallChaincodeZxl(reqCtx reqContext.Context, req InstallChaincodeRequest,
+	targets []fab.ProposalProcessor, opts ...Opt) (*fab.TransactionProposal, error) {//Zxl add
+
+	if req.Name == "" {
+		return nil, errors.New("chaincode name required")
+	}
+	if req.Path == "" {
+		return nil, errors.New("chaincode path required")
+	}
+	if req.Version == "" {
+		return nil, errors.New("chaincode version required")
+	}
+	if req.Package == nil {
+		return nil, errors.New("chaincode package is required")
+	}
+
+	propReq := ChaincodeInstallRequest{
+		Name:    req.Name,
+		Path:    req.Path,
+		Version: req.Version,
+		Package: &ChaincodePackage{
+			Type: req.Package.Type,
+			Code: req.Package.Code,
+		},
+	}
+
+	ctx, ok := contextImpl.RequestClientContext(reqCtx)
+	if !ok {
+		return nil, errors.New("failed get client context from reqContext for txn header")
+	}
+
+	txh, err := txn.NewHeader(ctx, fab.SystemChannel)
+	if err != nil {
+		return nil, errors.WithMessage(err, "create transaction ID failed")
+	}
+
+	prop, err := CreateChaincodeInstallProposal(txh, propReq)
+	if err != nil {
+		return nil, errors.WithMessage(err, "creation of install chaincode proposal failed")
+	}
+
+	optionsValue := getOpts(opts...)
+	fmt.Println("zxl ==== ", optionsValue.retry)
+
+	return prop, nil
+}
+
+func queryChaincodeWithTarget(reqCtx reqContext.Context, request fab.ChaincodeInvokeRequest,
+	target fab.ProposalProcessor, opts options) ([]byte, error) {
 
 	targets := []fab.ProposalProcessor{target}
 

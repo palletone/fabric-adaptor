@@ -23,7 +23,8 @@ import (
 )
 
 // CreateChaincodeInvokeProposal creates a proposal for transaction.
-func CreateChaincodeInvokeProposal(txh fab.TransactionHeader, request fab.ChaincodeInvokeRequest) (*fab.TransactionProposal, error) {
+func CreateChaincodeInvokeProposal(txh fab.TransactionHeader,
+	request fab.ChaincodeInvokeRequest) (*fab.TransactionProposal, error) {
 	if request.ChaincodeID == "" {
 		return nil, errors.New("ChaincodeID is required")
 	}
@@ -44,7 +45,9 @@ func CreateChaincodeInvokeProposal(txh fab.TransactionHeader, request fab.Chainc
 		Type: pb.ChaincodeSpec_GOLANG, ChaincodeId: &pb.ChaincodeID{Name: request.ChaincodeID},
 		Input: &pb.ChaincodeInput{Args: argsArray}}}
 
-	proposal, _, err := protoutil.CreateChaincodeProposalWithTxIDNonceAndTransient(string(txh.TransactionID()), common.HeaderType_ENDORSER_TRANSACTION, txh.ChannelID(), ccis, txh.Nonce(), txh.Creator(), request.TransientMap)
+	proposal, _, err := protoutil.CreateChaincodeProposalWithTxIDNonceAndTransient(
+		string(txh.TransactionID()), common.HeaderType_ENDORSER_TRANSACTION, txh.ChannelID(),
+		ccis, txh.Nonce(), txh.Creator(), request.TransientMap)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create chaincode proposal")
 	}
@@ -59,7 +62,7 @@ func CreateChaincodeInvokeProposal(txh fab.TransactionHeader, request fab.Chainc
 
 // signProposal creates a SignedProposal based on the current context.
 func signProposal(ctx contextApi.Client, proposal *pb.Proposal) (*pb.SignedProposal, error) {
-	proposalBytes, err := proto.Marshal(proposal)
+	proposalBytes, err := proto.Marshal(proposal)//mark zxl
 	if err != nil {
 		return nil, errors.Wrap(err, "mashal proposal failed")
 	}
@@ -78,7 +81,8 @@ func signProposal(ctx contextApi.Client, proposal *pb.Proposal) (*pb.SignedPropo
 }
 
 // SendProposal sends a TransactionProposal to ProposalProcessor.
-func SendProposal(reqCtx reqContext.Context, proposal *fab.TransactionProposal, targets []fab.ProposalProcessor) ([]*fab.TransactionProposalResponse, error) {
+func SendProposal(reqCtx reqContext.Context, proposal *fab.TransactionProposal,
+	targets []fab.ProposalProcessor) ([]*fab.TransactionProposalResponse, error) {
 
 	if proposal == nil {
 		return nil, errors.New("proposal is required")
@@ -136,6 +140,75 @@ func SendProposal(reqCtx reqContext.Context, proposal *fab.TransactionProposal, 
 	wg.Wait()
 
 	return transactionProposalResponses, errs.ToError()
+}
+
+func SendProposalZxl(reqCtx reqContext.Context, request *fab.ProcessProposalRequest,
+	targets []fab.ProposalProcessor) ([]*fab.TransactionProposalResponse, error) {//Zxl add
+
+	if request == nil {
+		return nil, errors.New("ProcessProposalRequest is required")
+	}
+
+	if len(targets) < 1 {
+		return nil, errors.New("targets is required")
+	}
+
+	for _, p := range targets {
+		if p == nil {
+			return nil, errors.New("target is nil")
+		}
+	}
+
+	targets = getTargetsWithoutDuplicates(targets)
+
+	var responseMtx sync.Mutex
+	var transactionProposalResponses []*fab.TransactionProposalResponse
+	var wg sync.WaitGroup
+	errs := multi.Errors{}
+
+	for _, p := range targets {
+		wg.Add(1)
+		go func(processor fab.ProposalProcessor) {
+			defer wg.Done()
+
+			// TODO: The RPC should be timed-out.
+			//resp, err := processor.ProcessTransactionProposal(context.NewRequestOLD(ctx), request)
+			resp, err := processor.ProcessTransactionProposal(reqCtx, *request)
+			if err != nil {
+				logger.Debugf("Received error response from txn proposal processing: %s", err)
+				responseMtx.Lock()
+				errs = append(errs, err)
+				responseMtx.Unlock()
+				return
+			}
+
+			responseMtx.Lock()
+			transactionProposalResponses = append(transactionProposalResponses, resp)
+			responseMtx.Unlock()
+		}(p)
+	}
+	wg.Wait()
+
+	return transactionProposalResponses, errs.ToError()
+}
+
+func SignProposal(reqCtx reqContext.Context,
+	proposal *fab.TransactionProposal) (*fab.ProcessProposalRequest, error) {//Zxl add
+
+	if proposal == nil {
+		return nil, errors.New("proposal is required")
+	}
+
+	ctx, ok := context.RequestClientContext(reqCtx)
+	if !ok {
+		return nil, errors.New("failed get client context from reqContext for signProposal")
+	}
+	signedProposal, err := signProposal(ctx, proposal.Proposal)
+	if err != nil {
+		return nil, errors.WithMessage(err, "sign proposal failed")
+	}
+	request := &fab.ProcessProposalRequest{SignedProposal: signedProposal, TxID:proposal.TxnID}
+	return request, nil
 }
 
 // getTargetsWithoutDuplicates returns a list of targets without duplicates

@@ -19,3 +19,19 @@ func callQuery(cc *Client, request Request, options ...RequestOption) (Response,
 func callExecute(cc *Client, request Request, options ...RequestOption) (Response, error) {
 	return cc.InvokeHandler(invoke.NewExecuteHandler(), request, options...)
 }
+
+func callExecuteZxl(cc *Client, request Request, options ...RequestOption) (Response, error) {//Zxl add
+	return cc.InvokeHandler(invoke.NewEndorsementHandlerZxl(), request, options...)
+}
+
+func callExecuteBroadcastFirstZxl(cc *Client, request Request,
+	options ...RequestOption) (Response, error) {//Zxl add
+	return cc.InvokeHandler(invoke.NewExecuteBroadcastFirstHandler(), request, options...)
+}
+func callExecuteSignFirstZxl(cc *Client, request Request, options ...RequestOption) (Response, error) {//Zxl add
+	return cc.InvokeHandler(invoke.NewCommitTxSignHandler(), request, options...)
+}
+func callExecuteBroadcastSecondZxl(cc *Client, request Request,
+	options ...RequestOption) (Response, error) {//Zxl add
+	return cc.InvokeHandler(invoke.NewExecuteBroadcastSecondHandler(), request, options...)
+}

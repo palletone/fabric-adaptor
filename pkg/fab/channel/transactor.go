@@ -168,6 +168,20 @@ func (t *Transactor) SendTransactionProposal(proposal *fab.TransactionProposal, 
 	return txn.SendProposal(reqCtx, proposal, targets)
 }
 
+// SendTransactionProposal sends a TransactionProposal to the target peers.
+func (t *Transactor) SendTransactionProposalZxl(req *fab.ProcessProposalRequest,
+	targets []fab.ProposalProcessor) ([]*fab.TransactionProposalResponse, error) {//Zxl add
+	ctx, ok := contextImpl.RequestClientContext(t.reqCtx)
+	if !ok {
+		return nil, errors.New("failed get client context from reqContext for SendTransactionProposal")
+	}
+
+	reqCtx, cancel := contextImpl.NewRequest(ctx, contextImpl.WithTimeoutType(fab.PeerResponse), contextImpl.WithParent(t.reqCtx))
+	defer cancel()
+
+	return txn.SendProposalZxl(reqCtx, req, targets)
+}
+
 // CreateTransaction create a transaction with proposal response.
 // TODO: should this be removed as it is purely a wrapper?
 func (t *Transactor) CreateTransaction(request fab.TransactionRequest) (*fab.Transaction, error) {
@@ -177,4 +191,10 @@ func (t *Transactor) CreateTransaction(request fab.TransactionRequest) (*fab.Tra
 // SendTransaction send a transaction to the chain’s orderer service (one or more orderer endpoints) for consensus and committing to the ledger.
 func (t *Transactor) SendTransaction(tx *fab.Transaction) (*fab.TransactionResponse, error) {
 	return txn.Send(t.reqCtx, tx, t.orderers)
+}
+func (t *Transactor) SignTransactionZxl(tx *fab.Transaction) (*fab.SignedEnvelope, error) {//Zxl add
+	return txn.SignZxl(t.reqCtx, tx, t.orderers)
+}
+func (t *Transactor) SendTransactionZxl(envelope *fab.SignedEnvelope) (*fab.TransactionResponse, error) {//Zxl add
+	return txn.SendZxl(t.reqCtx, envelope, t.orderers)
 }

@@ -44,6 +44,7 @@ func WithCreator(creator []byte) TxnHeaderOpt {
 type ProposalSender interface {
 	CreateTransactionHeader(opts ...TxnHeaderOpt) (TransactionHeader, error)
 	SendTransactionProposal(*TransactionProposal, []ProposalProcessor) ([]*TransactionProposalResponse, error)
+	SendTransactionProposalZxl(*ProcessProposalRequest, []ProposalProcessor) ([]*TransactionProposalResponse, error)//Zxl add
 }
 
 // TransactionID provides the identifier of a Fabric transaction proposal.
@@ -80,6 +81,12 @@ type TransactionProposal struct {
 // ProcessProposalRequest requests simulation of a proposed transaction from transaction processors.
 type ProcessProposalRequest struct {
 	SignedProposal *pb.SignedProposal
+	TxID TransactionID //Zxl add
+}
+
+type ProcessTransactionRequest struct {//Zxl add
+	TxSignedEnvelope *SignedEnvelope
+	TxID TransactionID
 }
 
 // TransactionProposalResponse respresents the result of transaction proposal processing.

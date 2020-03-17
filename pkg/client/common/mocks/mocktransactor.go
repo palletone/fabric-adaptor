@@ -39,7 +39,11 @@ func (t *MockTransactor) SendTransactionProposal(proposal *fab.TransactionPropos
 	defer cancel()
 	return txn.SendProposal(rqtx, proposal, targets)
 }
-
+func (t *MockTransactor) SendTransactionProposalZxl(proposal *fab.TransactionProposal, targets []fab.ProposalProcessor) ([]*fab.TransactionProposalResponse, error) {
+	rqtx, cancel := contextImpl.NewRequest(t.Ctx, contextImpl.WithTimeout(10*time.Second))
+	defer cancel()
+	return txn.SendProposal(rqtx, proposal, targets)
+}
 // CreateTransaction create a transaction with proposal response.
 func (t *MockTransactor) CreateTransaction(request fab.TransactionRequest) (*fab.Transaction, error) {
 	return txn.New(request)

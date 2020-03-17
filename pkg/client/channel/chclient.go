@@ -112,7 +112,30 @@ func (cc *Client) Execute(request Request, options ...RequestOption) (Response, 
 
 	return callExecute(cc, request, options...)
 }
+func (cc *Client) ExecuteZxl(request Request, options ...RequestOption) (Response, error) {//Zxl add
+	options = append(options, addDefaultTimeout(fab.Execute))
+	options = append(options, addDefaultTargetFilter(cc.context, filter.EndorsingPeer))
 
+	return callExecuteZxl(cc, request, options...)
+}
+func (cc *Client) ExecuteBrocadcastFirstZxl(request Request, options ...RequestOption) (Response, error) {//Zxl add
+	options = append(options, addDefaultTimeout(fab.Execute))
+	options = append(options, addDefaultTargetFilter(cc.context, filter.EndorsingPeer))
+
+	return callExecuteBroadcastFirstZxl(cc, request, options...)
+}
+func (cc *Client) ExecuteSignFirstZxl(request Request, options ...RequestOption) (Response, error) {//Zxl add
+	options = append(options, addDefaultTimeout(fab.Execute))
+	options = append(options, addDefaultTargetFilter(cc.context, filter.EndorsingPeer))
+
+	return callExecuteSignFirstZxl(cc, request, options...)
+}
+func (cc *Client) ExecuteBrocadcastSecondZxl(request Request, options ...RequestOption) (Response, error) {//Zxl add
+	options = append(options, addDefaultTimeout(fab.Execute))
+	options = append(options, addDefaultTargetFilter(cc.context, filter.EndorsingPeer))
+
+	return callExecuteBroadcastSecondZxl(cc, request, options...)
+}
 // addDefaultTargetFilter adds default target filter if target filter is not specified
 func addDefaultTargetFilter(chCtx context.Channel, ft filter.EndpointType) RequestOption {
 	return func(ctx context.Client, o *requestOptions) error {

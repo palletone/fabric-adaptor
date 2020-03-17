@@ -38,7 +38,8 @@ func (f *SignatureValidationHandler) Handle(requestContext *RequestContext, clie
 	}
 }
 
-func (f *SignatureValidationHandler) validate(txProposalResponse []*fab.TransactionProposalResponse, ctx *ClientContext) error {
+func (f *SignatureValidationHandler) validate(txProposalResponse []*fab.TransactionProposalResponse,
+	ctx *ClientContext) error {
 	for _, r := range txProposalResponse {
 		if err := verifyProposalResponse(r, ctx); err != nil {
 			return err
