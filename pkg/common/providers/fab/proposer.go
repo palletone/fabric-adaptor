@@ -75,18 +75,22 @@ type ChaincodeInvokeRequest struct {
 // TransactionProposal contains a marashalled transaction proposal.
 type TransactionProposal struct {
 	TxnID TransactionID
+	ChaincodeID  string //Zxl add
 	*pb.Proposal
 }
 
 // ProcessProposalRequest requests simulation of a proposed transaction from transaction processors.
 type ProcessProposalRequest struct {
-	SignedProposal *pb.SignedProposal
 	TxID TransactionID //Zxl add
+	ChaincodeID  string //Zxl add
+	SignedProposal *pb.SignedProposal
 }
 
 type ProcessTransactionRequest struct {//Zxl add
-	TxSignedEnvelope *SignedEnvelope
 	TxID TransactionID
+	ChaincodeID  string
+	Proposal *pb.Proposal
+	TxSignedEnvelope *SignedEnvelope
 }
 
 // TransactionProposalResponse respresents the result of transaction proposal processing.

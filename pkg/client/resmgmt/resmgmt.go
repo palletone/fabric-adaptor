@@ -733,7 +733,10 @@ func (rc *Client) InstantiateCCSignFirstZxl(channelID string, tx *fab.Transactio
 		return nil, errors.WithMessage(err, "failed to InstantiateCCSignFirstZxl")
 	}
 
-	return &fab.ProcessTransactionRequest{TxSignedEnvelope:signedEnvelope, TxID:tx.Proposal.TxnID}, err
+	return &fab.ProcessTransactionRequest{
+		Proposal:tx.Proposal.Proposal,
+		TxSignedEnvelope:signedEnvelope,
+		TxID:tx.Proposal.TxnID, ChaincodeID:tx.Proposal.ChaincodeID}, err
 }
 func (rc *Client) InstantiateCCBroadcastSecondZxl(channelID string, req *fab.ProcessTransactionRequest,
 	options ...RequestOption) (fab.TransactionID, error) {//Zxl add

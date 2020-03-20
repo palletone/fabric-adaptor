@@ -42,9 +42,7 @@ type Request struct {
 	TransientMap map[string][]byte
 
 	ProposalReq *fab.ProcessProposalRequest //Zxl add 用户对合约调用的签名【用于第一次广播】
-
-	Tx              *fab.Transaction //Zxl add 合约调用第一次发送后的结果【用于请求用户对二次广播的签名】
-
+	Tx              *fab.Transaction //Zxl add 合约调用第一次发送后的结果【用于请求用户签名，以进行第二次广播】
 	ProcessTxReq    *fab.ProcessTransactionRequest //Zxl add 合约调用对第一次发送结果的签名【用于第二次广播】
 
 	// InvocationChain contains meta-data that's used by some Selection Service implementations
@@ -65,7 +63,7 @@ type Response struct {
 	TransactionID    fab.TransactionID
 
 	Tx              *fab.Transaction //Zxl add 合约调用第一次发送后的结果【保存广播结果，用于下一步用户签名】
-	ProcessTxReq    *fab.ProcessTransactionRequest //Zxl add 合约调用对第一次发送结果的签名【保存用户签名，用于下一步的第二次广播】
+	ProcessTxReq    *fab.ProcessTransactionRequest //Zxl add 合约调用对第一次发送结果的签名【保存签名结果，用于第二次广播】
 
 	TxValidationCode pb.TxValidationCode
 	ChaincodeStatus  int32

@@ -239,9 +239,9 @@ func (cc *Client) createReqContext(txnOpts *requestOptions) (reqContext.Context,
 //prepareHandlerContexts prepares context objects for handlers
 func (cc *Client) prepareHandlerContexts(reqCtx reqContext.Context, request Request, o requestOptions) (*invoke.RequestContext, *invoke.ClientContext, error) {
 
-	if request.ChaincodeID == "" || request.Fcn == "" {
-		return nil, nil, errors.New("ChaincodeID and Fcn are required")
-	}
+	//if request.ChaincodeID == "" || request.Fcn == "" {//Zxl todo back
+	//	return nil, nil, errors.New("ChaincodeID and Fcn are required")
+	//}
 
 	transactor, err := cc.context.ChannelService().Transactor(reqCtx)
 	if err != nil {

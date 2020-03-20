@@ -54,6 +54,7 @@ func CreateChaincodeInvokeProposal(txh fab.TransactionHeader,
 
 	tp := fab.TransactionProposal{
 		TxnID:    txh.TransactionID(),
+		ChaincodeID:    request.ChaincodeID,//Zxl add
 		Proposal: proposal,
 	}
 
@@ -207,7 +208,8 @@ func SignProposal(reqCtx reqContext.Context,
 	if err != nil {
 		return nil, errors.WithMessage(err, "sign proposal failed")
 	}
-	request := &fab.ProcessProposalRequest{SignedProposal: signedProposal, TxID:proposal.TxnID}
+	request := &fab.ProcessProposalRequest{SignedProposal: signedProposal,
+		TxID:proposal.TxnID, ChaincodeID:proposal.ChaincodeID}
 	return request, nil
 }
 

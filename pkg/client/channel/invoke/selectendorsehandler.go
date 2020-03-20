@@ -91,6 +91,67 @@ func (e *SelectAndEndorseHandler) Handle(requestContext *RequestContext, clientC
 	}
 }
 
+type SelectAndEndorseHandlerZxl struct {
+	*EndorsementHandlerZxl
+	next Handler
+}
+
+// NewSelectAndEndorseHandler returns a new SelectAndEndorseHandler
+func NewSelectAndEndorseHandlerZxl(next ...Handler) Handler {
+	return &SelectAndEndorseHandlerZxl{
+		EndorsementHandlerZxl: NewEndorsementHandlerZxl(),
+		next:               getNext(next),
+	}
+}
+
+// Handle selects endorsers and sends proposals to the endorsers
+func (e *SelectAndEndorseHandlerZxl) Handle(requestContext *RequestContext, clientContext *ClientContext) {
+	var ccCalls []*fab.ChaincodeCall
+	targets := requestContext.Opts.Targets
+	if len(targets) == 0 {
+		var err error
+		ccCalls, requestContext.Opts.Targets, err = getEndorsers(requestContext, clientContext)
+		if err != nil {
+			requestContext.Error = err
+			return
+		}
+	}
+
+	e.EndorsementHandlerZxl.Handle(requestContext, clientContext)
+
+	if requestContext.Error != nil {
+		return
+	}
+
+	if len(targets) == 0 && len(requestContext.Response.Responses) > 0 {
+		additionalEndorsers, err := getAdditionalEndorsers(requestContext, clientContext, ccCalls)
+		if err != nil {
+			// Log a warning. No need to fail the endorsement. Use the responses collected so far,
+			// which may be sufficient to satisfy the chaincode policy.
+			logger.Warnf("error getting additional endorsers: %s", err)
+		} else {
+			if len(additionalEndorsers) > 0 {
+				requestContext.Opts.Targets = additionalEndorsers
+				logger.Debugf("...getting additional endorsements from %d target(s)", len(additionalEndorsers))
+				additionalResponses, err := clientContext.Transactor.SendTransactionProposal(requestContext.Response.Proposal, peer.PeersToTxnProcessors(additionalEndorsers))
+				if err != nil {
+					requestContext.Error = errors.WithMessage(err, "error sending transaction proposal")
+					return
+				}
+
+				// Add the new endorsements to the list of responses
+				requestContext.Response.Responses = append(requestContext.Response.Responses, additionalResponses...)
+			} else {
+				logger.Debugf("...no additional endorsements are required.")
+			}
+		}
+	}
+
+	if e.next != nil {
+		e.next.Handle(requestContext, clientContext)
+	}
+}
+
 //NewChainedCCFilter returns a chaincode filter that chains
 //multiple filters together. False is returned if at least one
 //of the filters in the chain returns false.
@@ -115,7 +176,7 @@ func getEndorsers(requestContext *RequestContext, clientContext *ClientContext, 
 		selectionOpts = append(selectionOpts, selectopts.WithPeerSorter(requestContext.PeerSorter))
 	}
 
-	ccCalls := newInvocationChain(requestContext)
+	ccCalls := newInvocationChain(requestContext)//Zxl todo
 	peers, err := clientContext.Selection.GetEndorsersForChaincode(newInvocationChain(requestContext), selectionOpts...)
 	return ccCalls, peers, err
 }

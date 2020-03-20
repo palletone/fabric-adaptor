@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/palletone/fabric-adaptor/pkg/context"
 	"os"
 
 	"github.com/palletone/fabric-adaptor/pkg/client/channel"
@@ -31,6 +30,7 @@ import (
 	"github.com/palletone/fabric-adaptor/pkg/client/resmgmt"
 	"github.com/palletone/fabric-adaptor/pkg/common/providers/fab"
 	pmsp "github.com/palletone/fabric-adaptor/pkg/common/providers/msp"
+	"github.com/palletone/fabric-adaptor/pkg/context"
 	"github.com/palletone/fabric-adaptor/pkg/core/config"
 	"github.com/palletone/fabric-adaptor/pkg/core/cryptosuite"
 	"github.com/palletone/fabric-adaptor/pkg/fab/ccpackager/gopackager"
@@ -142,6 +142,7 @@ func InitMsp(afab *AdaptorFabric) error  {
 	return nil
 }
 
+//use afab.UserName
 func getClientContext(afab *AdaptorFabric) (fab.ClientContext, error) {
 	err := InitSDK(afab)
 	if err != nil {
@@ -403,16 +404,15 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 	if err != nil {
 		return nil, err
 	}
-	err = InitResmgmt(afab)
-	if err != nil {
-		return nil, err
-	}
-
 
 	txType := string(input.Extra)
 	if "" != txType {
 		switch txType {
 		case "install":
+			err = InitResmgmt(afab)
+			if err != nil {
+				return nil, err
+			}
 			var processProposalRequest fab.ProcessProposalRequest
 			err = json.Unmarshal(input.Transaction, &processProposalRequest)
 			if err != nil {
@@ -420,7 +420,7 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			}
 			result, txID, err := afab.ResClient.InstallCCBroadcastZxl(&processProposalRequest)
 			if err != nil {
-				fmt.Println("ResClient.Broadcast", err.Error())
+				fmt.Println("ResClient.InstallCCBroadcastZxl", err.Error())
 				return nil, err
 			}
 			//fmt.Println(len(rspArr))
@@ -431,6 +431,10 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			output.TxID = []byte(txID)
 			return &output, nil
 		case "init1":
+			err = InitResmgmt(afab)
+			if err != nil {
+				return nil, err
+			}
 			var processProposalRequest fab.ProcessProposalRequest
 			err = json.Unmarshal(input.Transaction, &processProposalRequest)
 			if err != nil {
@@ -450,6 +454,10 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			output.Extra = resultJSON
 			return &output,nil
 		case "init2":
+			err = InitResmgmt(afab)
+			if err != nil {
+				return nil, err
+			}
 			var processTxReq fab.ProcessTransactionRequest
 			err = json.Unmarshal(input.Transaction, &processTxReq)
 			if err != nil {
@@ -473,13 +481,19 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			if err != nil {
 				return nil, err
 			}
+			//var proposal pb.Proposal
+			//err = proto.Unmarshal(processProposalRequest.SignedProposal.ProposalBytes, &proposal)//Zxl todo
+			//if err != nil {
+			//	return nil, err
+			//}
 			//写入之前,要创建请求:
 			req := channel.Request{
+				ChaincodeID:processProposalRequest.ChaincodeID,
 				ProposalReq: &processProposalRequest,
 			}
 			resp, err := afab.ChannelClient.ExecuteBrocadcastFirstZxl(req)
 			if err != nil {
-				fmt.Println("ResClient.Broadcast", err.Error())
+				fmt.Println("ResClient.ExecuteBrocadcastFirstZxl", err.Error())
 				return nil, err
 			}
 			resultJSON, err := json.Marshal(*resp.Tx)
@@ -502,11 +516,12 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			}
 			//写入之前,要创建请求:
 			req := channel.Request{
+				ChaincodeID:processTxReq.ChaincodeID,
 				ProcessTxReq: &processTxReq,
 			}
 			resp, err := afab.ChannelClient.ExecuteBrocadcastSecondZxl(req)
 			if err != nil {
-				fmt.Println("ResClient.Broadcast", err.Error())
+				fmt.Println("ResClient.ExecuteBrocadcastSecondZxl", err.Error())
 				return nil, err
 			}
 			var output adaptor.SendTransactionOutput // todo
@@ -658,12 +673,12 @@ func (afab *AdaptorFabric) CreateContractInstallTx(input *adaptor.CreateContract
 	//result, err := afab.ResClient.InstallCC(installCCRequest)
 	result, err := afab.ResClient.InstallCCZxl(installCCRequest)
 	if err != nil {
-		fmt.Println("ResClient.InstallCC", err.Error())
+		fmt.Println("ResClient.InstallCCZxl", err.Error())
 		return nil, err
 	}
 	//fmt.Println(len(rspArr))
 	fmt.Println(result)
-	fmt.Println("InstallCC return", result.TxnID)
+	//fmt.Println("InstallCC return", result.TxnID)
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

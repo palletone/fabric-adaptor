@@ -8,7 +8,6 @@ package invoke
 
 import (
 	"bytes"
-
 	"github.com/golang/protobuf/proto"
 
 	"github.com/palletone/fabric-adaptor/pkg/common/errors/status"
@@ -88,25 +87,52 @@ func NewEndorsementHandlerZxl(next ...Handler) *EndorsementHandlerZxl {//Zxl add
 //Handle for endorsing transactions
 func (e *EndorsementHandlerZxl) Handle(requestContext *RequestContext, clientContext *ClientContext) {
 
-	// Endorse Tx
-	var TxnHeaderOpts []fab.TxnHeaderOpt
-	if e.headerOptsProvider != nil {
-		TxnHeaderOpts = e.headerOptsProvider()
-	}
 
-	proposal, err := createTransactionProposal(
-		clientContext.Transactor,
-		&requestContext.Request,
-		TxnHeaderOpts...,
-	)
 
-	requestContext.Response.Proposal = proposal
-	requestContext.Response.TransactionID = proposal.TxnID // TODO: still needed?
+	var proposal *pb.Proposal
+	var txID fab.TransactionID //Zxl add
+	if nil != requestContext.Request.ProposalReq {
+		proposalReq := requestContext.Request.ProposalReq
+		var proposalInReq pb.Proposal
+		err := proto.Unmarshal(proposalReq.SignedProposal.ProposalBytes, &proposalInReq)//Zxl todo
+		if err != nil {
+			requestContext.Error = err
+			return
+		}
+		proposal = &proposalInReq
+		txID = proposalReq.TxID
+	} else if nil != requestContext.Request.ProcessTxReq {
+		processTxReq := requestContext.Request.ProcessTxReq
+		proposal = processTxReq.Proposal
+		txID = processTxReq.TxID
+	} else {
+		// Endorse Tx
+		var TxnHeaderOpts []fab.TxnHeaderOpt
+		if e.headerOptsProvider != nil {
+			TxnHeaderOpts = e.headerOptsProvider()
+		}
+		txProposal, err := createTransactionProposal(
+			clientContext.Transactor,
+			&requestContext.Request,
+			TxnHeaderOpts...,
+		)
+		if err != nil {
+			requestContext.Error = err
+			return
+		}
+		requestContext.Response.Proposal = txProposal
+		requestContext.Response.TransactionID =txProposal.TxnID // TODO: still needed?
 
-	if err != nil {
-		requestContext.Error = err
+		//Delegate to next step if any
+		if e.next != nil {
+			e.next.Handle(requestContext, clientContext)
+		}
 		return
 	}
+
+	txProposal := &fab.TransactionProposal{Proposal:proposal}
+	requestContext.Response.Proposal = txProposal
+	requestContext.Response.TransactionID =txID // TODO: still needed?
 
 	//Delegate to next step if any
 	if e.next != nil {
@@ -155,6 +181,7 @@ func (e *EndorsementHandlerBroadcastZxl) Handle(requestContext *RequestContext,
 	}
 	requestContext.Response.Proposal = &fab.TransactionProposal{
 		TxnID:proposalReq.TxID,
+		ChaincodeID:proposalReq.ChaincodeID,
 		Proposal:&proposal}
 	requestContext.Response.TransactionID = proposalReq.TxID // TODO: still needed?
 
@@ -339,7 +366,10 @@ func (c *CommitTxSignHandler) Handle(requestContext *RequestContext, clientConte
 		return
 	}
 	requestContext.Response.ProcessTxReq = &fab.ProcessTransactionRequest{
-		TxSignedEnvelope:signedEnvelope, TxID:requestContext.Request.Tx.Proposal.TxnID}
+		Proposal:requestContext.Request.Tx.Proposal.Proposal,
+		TxSignedEnvelope:signedEnvelope,
+		TxID:requestContext.Request.Tx.Proposal.TxnID,
+		ChaincodeID:requestContext.Request.Tx.Proposal.ChaincodeID}
 
 	//Delegate to next step if any
 	if c.next != nil {
@@ -417,14 +447,14 @@ func NewExecuteHandler(next ...Handler) Handler {
 }
 
 func NewExecuteBroadcastFirstHandler(next ...Handler) Handler {
-	return NewEndorsementHandlerBroadcastZxl(
+	return NewSelectAndEndorseHandlerZxl(
+		NewEndorsementHandlerBroadcastZxl(
 		NewEndorsementValidationHandler(
-			NewSignatureValidationHandler(NewCommitTxCreateHandler(next...)),
-		),
-	)
+			NewSignatureValidationHandler(NewCommitTxCreateHandler(next...),),
+		)))
 }
 func NewExecuteBroadcastSecondHandler(next ...Handler) Handler {
-	return NewCommitTxSendHandler(next...)
+	return NewSelectAndEndorseHandlerZxl(NewCommitTxSendHandler(next...),)
 }
 //NewProposalProcessorHandler returns a handler that selects proposal processors
 func NewProposalProcessorHandler(next ...Handler) *ProposalProcessorHandler {

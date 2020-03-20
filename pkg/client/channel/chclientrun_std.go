@@ -21,7 +21,7 @@ func callExecute(cc *Client, request Request, options ...RequestOption) (Respons
 }
 
 func callExecuteZxl(cc *Client, request Request, options ...RequestOption) (Response, error) {//Zxl add
-	return cc.InvokeHandler(invoke.NewEndorsementHandlerZxl(), request, options...)
+	return cc.InvokeHandler(invoke.NewSelectAndEndorseHandlerZxl(), request, options...)
 }
 
 func callExecuteBroadcastFirstZxl(cc *Client, request Request,
