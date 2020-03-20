@@ -24,6 +24,10 @@ func callExecuteZxl(cc *Client, request Request, options ...RequestOption) (Resp
 	return cc.InvokeHandler(invoke.NewSelectAndEndorseHandlerZxl(), request, options...)
 }
 
+func callExecuteBroadcastZxl(cc *Client, request Request,
+	options ...RequestOption) (Response, error) {//Zxl add
+	return cc.InvokeHandler(invoke.NewExecuteBroadcastHandler(), request, options...)
+}
 func callExecuteBroadcastFirstZxl(cc *Client, request Request,
 	options ...RequestOption) (Response, error) {//Zxl add
 	return cc.InvokeHandler(invoke.NewExecuteBroadcastFirstHandler(), request, options...)

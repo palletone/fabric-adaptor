@@ -94,7 +94,7 @@ func (e *EndorsementHandlerZxl) Handle(requestContext *RequestContext, clientCon
 	if nil != requestContext.Request.ProposalReq {
 		proposalReq := requestContext.Request.ProposalReq
 		var proposalInReq pb.Proposal
-		err := proto.Unmarshal(proposalReq.SignedProposal.ProposalBytes, &proposalInReq)//Zxl todo
+		err := proto.Unmarshal(proposalReq.SignedProposal.ProposalBytes, &proposalInReq)
 		if err != nil {
 			requestContext.Error = err
 			return
@@ -444,6 +444,14 @@ func NewExecuteHandler(next ...Handler) Handler {
 			NewSignatureValidationHandler(NewCommitHandler(next...)),
 		),
 	)
+}
+
+func NewExecuteBroadcastHandler(next ...Handler) Handler {
+	return NewSelectAndEndorseHandlerZxl(
+		NewEndorsementHandlerBroadcastZxl(
+			NewEndorsementValidationHandler(
+				NewSignatureValidationHandler(NewCommitHandler(next...),),
+			)))
 }
 
 func NewExecuteBroadcastFirstHandler(next ...Handler) Handler {

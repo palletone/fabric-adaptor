@@ -118,6 +118,13 @@ func (cc *Client) ExecuteZxl(request Request, options ...RequestOption) (Respons
 
 	return callExecuteZxl(cc, request, options...)
 }
+
+func (cc *Client) ExecuteBrocadcastZxl(request Request, options ...RequestOption) (Response, error) {//Zxl add
+	options = append(options, addDefaultTimeout(fab.Execute))
+	options = append(options, addDefaultTargetFilter(cc.context, filter.EndorsingPeer))
+
+	return callExecuteBroadcastZxl(cc, request, options...)
+}
 func (cc *Client) ExecuteBrocadcastFirstZxl(request Request, options ...RequestOption) (Response, error) {//Zxl add
 	options = append(options, addDefaultTimeout(fab.Execute))
 	options = append(options, addDefaultTargetFilter(cc.context, filter.EndorsingPeer))

@@ -166,7 +166,8 @@ func New(ctxProvider context.ClientProvider, opts ...ClientOption) (*Client, err
 		return nil, errors.WithMessage(err, "failed to create resmgmt client due to context error")
 	}
 
-	if ctx.Identifier().MSPID == "" {
+	identityIdentifier := ctx.Identifier()
+	if nil == identityIdentifier || identityIdentifier.MSPID == "" {//Zxl mod panic not fix
 		return nil, errors.New("mspID not available in user context")
 	}
 
@@ -703,6 +704,21 @@ func (rc *Client) InstantiateCCCreateInitZxl(channelID string, req InstantiateCC
 		InstantiateChaincode, channelID, req, opts)
 	return transactionProposal, err
 }
+func (rc *Client) InstantiateCCBroadcasZxl(channelID string, req *fab.ProcessProposalRequest,
+	options ...RequestOption) (fab.TransactionID, error) {//Zxl add
+
+	opts, err := rc.prepareRequestOpts(options...)
+	if err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err,
+			"failed to get opts for InstantiateCC")
+	}
+
+	reqCtx, cancel := rc.createRequestContext(opts, fab.ResMgmt)
+	defer cancel()
+
+	txID, err := rc.sendCCProposalZxl(reqCtx, InstantiateChaincode, channelID, req, opts)
+	return txID, err
+}
 func (rc *Client) InstantiateCCBroadcastFirstZxl(channelID string, req *fab.ProcessProposalRequest, 
 	options ...RequestOption) (*fab.Transaction, error) {//Zxl add
 
@@ -1108,6 +1124,53 @@ func (rc *Client) sendCCProposal(reqCtx reqContext.Context, ccProposalType chain
 	return rc.sendTransactionAndCheckEvent(eventService, tp, txProposalResponse, transactor, reqCtx)
 
 }
+
+func (rc *Client) sendCCProposalZxl(reqCtx reqContext.Context, ccProposalType chaincodeProposalType,
+	channelID string, req *fab.ProcessProposalRequest, opts requestOptions) (fab.TransactionID, error) {
+	//if err := checkRequiredCCProposalParams(channelID, req); err != nil {
+	//	return fab.EmptyTransactionID, err
+	//}
+
+	targets, err := rc.getCCProposalTargets(channelID, opts)
+	if err != nil {
+		return fab.EmptyTransactionID, err
+	}
+	// Get transactor on the channel to create and send the deploy proposal
+	channelService, err := rc.ctx.ChannelProvider().ChannelService(rc.ctx, channelID)
+	if err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err,
+			"Unable to get channel service")
+	}
+
+	transactor, err := channelService.Transactor(reqCtx)
+	if err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err,
+			"get channel transactor failed")
+	}
+
+	// Process and send transaction proposal
+	txProposalResponse, err := transactor.SendTransactionProposalZxl(req, peersToTxnProcessors(targets))
+	if err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err, "sending deploy transaction proposal failed")
+	}
+
+	// Verify signature(s)
+	err = rc.verifyTPSignature(channelService, txProposalResponse)
+	if err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err,
+			"sending deploy transaction proposal failed to verify signature")
+	}
+
+	eventService, err := channelService.EventService()
+	if err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err, "unable to get event service")
+	}
+
+	// send transaction and check event
+	return rc.sendTransactionAndCheckEventBroadcastZxl(eventService, req, txProposalResponse, transactor, reqCtx)
+
+}
+
 func (rc *Client) sendCCProposalBroadcastFirstZxl(reqCtx reqContext.Context,
 	ccProposalType chaincodeProposalType, channelID string, req *fab.ProcessProposalRequest,
 	opts requestOptions) (*fab.Transaction, error) {//Zxl add
@@ -1189,7 +1252,7 @@ func (rc *Client) sendCCProposalBroadcastSecondZxl(reqCtx reqContext.Context,
 	}
 
 	// create transaction
-	return rc.sendTransactionAndCheckEventZxl(eventService, txenvelope, transactor, reqCtx)
+	return rc.sendTransactionAndCheckEventBroadcastSecondZxl(eventService, txenvelope, transactor, reqCtx)
 }
 
 // sendCCProposal sends proposal for type  Instantiate, Upgrade
@@ -1253,6 +1316,40 @@ func (rc *Client) sendTransactionAndCheckEvent(eventService fab.EventService,
 	}
 }
 
+func (rc *Client) sendTransactionAndCheckEventBroadcastZxl(eventService fab.EventService,
+	req *fab.ProcessProposalRequest, txProposalResponse []*fab.TransactionProposalResponse,
+	transac fab.Transactor, reqCtx reqContext.Context) (fab.TransactionID, error) {
+	// Register for commit event
+	reg, statusNotifier, err := eventService.RegisterTxStatusEvent(string(req.TxID))
+	if err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err, "error registering for TxStatus event")
+	}
+	defer eventService.Unregister(reg)
+
+	var proposal pb.Proposal
+	err = proto.Unmarshal(req.SignedProposal.ProposalBytes, &proposal)//Zxl todo
+	if err != nil {
+		return fab.EmptyTransactionID, err
+	}
+	transactionRequest := fab.TransactionRequest{
+		Proposal:          &fab.TransactionProposal{Proposal:&proposal,
+			TxnID:req.TxID, ChaincodeID:req.ChaincodeID},
+		ProposalResponses: txProposalResponse,
+	}
+	if _, err := createAndSendTransaction(transac, transactionRequest); err != nil {
+		return fab.EmptyTransactionID, errors.WithMessage(err, "CreateAndSendTransaction failed")
+	}
+
+	select {
+	case txStatus := <-statusNotifier:
+		if txStatus.TxValidationCode == pb.TxValidationCode_VALID {
+			return fab.TransactionID(txStatus.TxID), nil
+		}
+		return fab.TransactionID(txStatus.TxID), status.New(status.EventServerStatus, int32(txStatus.TxValidationCode), "instantiateOrUpgradeCC failed", nil)
+	case <-reqCtx.Done():
+		return fab.EmptyTransactionID, errors.New("instantiateOrUpgradeCC timed out or cancelled")
+	}
+}
 func (rc *Client) createTransaction(req *fab.ProcessProposalRequest,
 	txProposalResponse []*fab.TransactionProposalResponse,
 	transac fab.Transactor, reqCtx reqContext.Context) (*fab.Transaction, error) {//Zxl add
@@ -1282,7 +1379,7 @@ func (rc *Client) signTransaction(tx *fab.Transaction, transac fab.Transactor) (
 	return envelope, nil
 }
 
-func (rc *Client) sendTransactionAndCheckEventZxl(eventService fab.EventService,
+func (rc *Client) sendTransactionAndCheckEventBroadcastSecondZxl(eventService fab.EventService,
 	txenvelope *fab.ProcessTransactionRequest,
 	transac fab.Transactor, reqCtx reqContext.Context) (fab.TransactionID, error) {//Zxl add
 	// Register for commit event

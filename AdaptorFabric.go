@@ -240,7 +240,8 @@ func (afab *AdaptorFabric) SignMessage(input *adaptor.SignMessageInput) (
 	if pmsp.Identity(nil) == identifier {
 		fmt.Println("identifier is nil")
 	}
-	sig,err := clientContext.SigningManager().Sign(input.Message, clientContext.PrivateKey())
+	sig,err := clientContext.SigningManager().Sign(input.Message,
+		clientContext.PrivateKey())//Zxl todo panic not fix
 	if err != nil {
 		fmt.Println("clientContext.Sign()", err.Error())
 		return nil, err
@@ -289,101 +290,31 @@ func (afab *AdaptorFabric) VerifySignature(input *adaptor.VerifySignatureInput) 
 //对一条交易进行签名，并返回签名结果
 func (afab *AdaptorFabric) SignTransaction(input *adaptor.SignTransactionInput) (
 	*adaptor.SignTransactionOutput, error) {
-	txType := string(input.Extra)
-	if "" != txType {
-		switch txType {
-		case "proposal":
-			clientContext, err := getClientContext(afab)
-			if err != nil {
-				return nil, err
-			}
-			ctx, _ := context.NewRequest(clientContext)
-			var proposal fab.TransactionProposal
-			err = json.Unmarshal(input.Transaction, &proposal)
-			if err != nil {
-				return nil, err
-			}
-			processProposalRequest, err := txn.SignProposal(ctx, &proposal)
-			if err != nil {
-				fmt.Println("txn.SignProposal", err.Error())
-				return nil, err
-			}
-
-			resultJSON, err := json.Marshal(*processProposalRequest)
-			if err != nil {
-				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
-				return nil, err
-			}
-
-			var output adaptor.SignTransactionOutput
-			output.SignedTx = resultJSON
-			return &output, nil
-
-		case "inittx":
-			err := InitSDK(afab)
-			if err != nil {
-				return nil, err
-			}
-			err = InitResmgmt(afab)
-			if err != nil {
-				return nil, err
-			}
-
-			var tx fab.Transaction
-			err = json.Unmarshal(input.Transaction, &tx)
-			if err != nil {
-				return nil, err
-			}
-			processTxRequest, err := afab.ResClient.InstantiateCCSignFirstZxl(afab.ChannelID, &tx)
-			if err != nil {
-				fmt.Println("ResClient.Broadcast", err.Error())
-				return nil, err
-			}
-
-			resultJSON, err := json.Marshal(*processTxRequest)
-			if err != nil {
-				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
-				return nil, err
-			}
-
-			var output adaptor.SignTransactionOutput
-			output.SignedTx = resultJSON
-			return &output, nil
-		case "invoketx":
-			err := InitSDK(afab)
-			if err != nil {
-				return nil, err
-			}
-			err = InitChannel(afab)
-			if err != nil {
-				return nil, err
-			}
-
-			var tx fab.Transaction
-			err = json.Unmarshal(input.Transaction, &tx)
-			if err != nil {
-				return nil, err
-			}
-			req := channel.Request{
-				Tx: &tx,
-			}
-			resp, err := afab.ChannelClient.ExecuteSignFirstZxl(req)
-			if err != nil {
-				fmt.Println("ResClient.Broadcast", err.Error())
-				return nil, err
-			}
-			resultJSON, err := json.Marshal(*resp.ProcessTxReq)
-			if err != nil {
-				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
-				return nil, err
-			}
-
-			var output adaptor.SignTransactionOutput
-			output.SignedTx = resultJSON
-			return &output, nil
-		}
+	clientContext, err := getClientContext(afab)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("invalid extra")
+	ctx, _ := context.NewRequest(clientContext)
+	var proposal fab.TransactionProposal
+	err = json.Unmarshal(input.Transaction, &proposal)
+	if err != nil {
+		return nil, err
+	}
+	processProposalRequest, err := txn.SignProposal(ctx, &proposal)
+	if err != nil {
+		fmt.Println("txn.SignProposal", err.Error())
+		return nil, err
+	}
+
+	resultJSON, err := json.Marshal(*processProposalRequest)
+	if err != nil {
+		fmt.Println("json.Marshal(processProposalRequest)", err.Error())
+		return nil, err
+	}
+
+	var output adaptor.SignTransactionOutput
+	output.SignedTx = resultJSON
+	return &output, nil
 }
 
 //将未签名的原始交易与签名进行绑定，返回一个签名后的交易
@@ -430,7 +361,7 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			var output adaptor.SendTransactionOutput // todo
 			output.TxID = []byte(txID)
 			return &output, nil
-		case "init1":
+		case "init":
 			err = InitResmgmt(afab)
 			if err != nil {
 				return nil, err
@@ -440,30 +371,7 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			if err != nil {
 				return nil, err
 			}
-			tx, err := afab.ResClient.InstantiateCCBroadcastFirstZxl(afab.ChannelID, &processProposalRequest)
-			if err != nil {
-				fmt.Println("ResClient.Broadcast", err.Error())
-				return nil, err
-			}
-			resultJSON, err := json.Marshal(*tx)
-			if err != nil {
-				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
-				return nil, err
-			}
-			var output adaptor.SendTransactionOutput // todo
-			output.Extra = resultJSON
-			return &output,nil
-		case "init2":
-			err = InitResmgmt(afab)
-			if err != nil {
-				return nil, err
-			}
-			var processTxReq fab.ProcessTransactionRequest
-			err = json.Unmarshal(input.Transaction, &processTxReq)
-			if err != nil {
-				return nil, err
-			}
-			txID, err := afab.ResClient.InstantiateCCBroadcastSecondZxl(afab.ChannelID, &processTxReq)
+			txID, err := afab.ResClient.InstantiateCCBroadcasZxl(afab.ChannelID, &processProposalRequest)
 			if err != nil {
 				fmt.Println("ResClient.Broadcast", err.Error())
 				return nil, err
@@ -471,7 +379,7 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			var output adaptor.SendTransactionOutput // todo
 			output.TxID = []byte(txID)
 			return &output,nil
-		case "invoke1":
+		case "invoke":
 			err = InitChannel(afab)
 			if err != nil {
 				return nil, err
@@ -481,52 +389,21 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			if err != nil {
 				return nil, err
 			}
-			//var proposal pb.Proposal
-			//err = proto.Unmarshal(processProposalRequest.SignedProposal.ProposalBytes, &proposal)//Zxl todo
-			//if err != nil {
-			//	return nil, err
-			//}
+
 			//写入之前,要创建请求:
 			req := channel.Request{
 				ChaincodeID:processProposalRequest.ChaincodeID,
 				ProposalReq: &processProposalRequest,
 			}
-			resp, err := afab.ChannelClient.ExecuteBrocadcastFirstZxl(req)
+			resp, err := afab.ChannelClient.ExecuteBrocadcastZxl(req)
 			if err != nil {
 				fmt.Println("ResClient.ExecuteBrocadcastFirstZxl", err.Error())
-				return nil, err
-			}
-			resultJSON, err := json.Marshal(*resp.Tx)
-			if err != nil {
-				fmt.Println("json.Marshal(processProposalRequest)", err.Error())
-				return nil, err
-			}
-			var output adaptor.SendTransactionOutput // todo
-			output.Extra = resultJSON
-			return &output,nil
-		case "invoke2":
-			err = InitChannel(afab)
-			if err != nil {
-				return nil, err
-			}
-			var processTxReq fab.ProcessTransactionRequest
-			err = json.Unmarshal(input.Transaction, &processTxReq)
-			if err != nil {
-				return nil, err
-			}
-			//写入之前,要创建请求:
-			req := channel.Request{
-				ChaincodeID:processTxReq.ChaincodeID,
-				ProcessTxReq: &processTxReq,
-			}
-			resp, err := afab.ChannelClient.ExecuteBrocadcastSecondZxl(req)
-			if err != nil {
-				fmt.Println("ResClient.ExecuteBrocadcastSecondZxl", err.Error())
 				return nil, err
 			}
 			var output adaptor.SendTransactionOutput // todo
 			output.TxID = []byte(resp.TransactionID)
 			return &output,nil
+
 		}
 	}
 
@@ -865,7 +742,7 @@ func (afab *AdaptorFabric) QueryContract(input *adaptor.QueryContractInput) (
 		return nil, err
 	}
 	fmt.Println(resp.TransactionID)
-	fmt.Println(string(resp.Payload))
+	//fmt.Println(string(resp.Payload))
 
 	var output adaptor.QueryContractOutput
 	output.QueryResult = resp.Payload
