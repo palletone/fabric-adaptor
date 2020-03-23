@@ -73,10 +73,10 @@ func InitSDK(afab *AdaptorFabric) error {
 	}
 	sdk, err := fabsdk.New(config.FromFile(afab.ConfigFile))
 	if err != nil {
-		fmt.Println("fabsdk.New",err.Error())
+		//fmt.Println("fabsdk.New",err.Error())
 		return err
 	}
-	fmt.Println("fabsdk.New success")
+	//fmt.Println("fabsdk.New success")
 	afab.Sdk = sdk
 	return nil
 }
@@ -90,7 +90,7 @@ func InitLedger(afab *AdaptorFabric) error  {
 	// 创建 ledger 客户端
 	ledgerClient, err := ledger.New(clientContext)
 	if err != nil {
-		fmt.Println(err.Error())
+		//fmt.Println(err.Error())
 		return err
 	}
 	afab.LedgerClient = ledgerClient
@@ -106,7 +106,7 @@ func InitChannel(afab *AdaptorFabric) error  {
 	// 创建channel客户端
 	channelClient, err := channel.New(clientContext)
 	if err != nil {
-		fmt.Println("channel.New",err.Error())
+		//fmt.Println("channel.New",err.Error())
 		return err
 	}
 	afab.ChannelClient = channelClient
@@ -119,11 +119,12 @@ func InitResmgmt(afab *AdaptorFabric) error  {
 	}
 	afab.EnvGoPath = os.Getenv("GOPATH")
 	//根据实例创建资源管理客户端
-	resCliProvider := afab.Sdk.Context(fabsdk.WithUser(afab.OrgAdmin),fabsdk.WithOrg(afab.OrgName))
+	//resCliProvider := afab.Sdk.Context(fabsdk.WithUser(afab.OrgAdmin),fabsdk.WithOrg(afab.OrgName))
+	resCliProvider := afab.Sdk.ContextZxl(fabsdk.WithUser(afab.OrgAdmin),fabsdk.WithOrg(afab.OrgName))
 	resClient, err := resmgmt.New(resCliProvider)
 	if err != nil {
-		fmt.Println("resmgmt.New",err.Error())
-		return nil
+		//fmt.Println("resmgmt.New",err.Error())
+		return err
 	}
 	afab.ResClient = resClient
 	return nil
@@ -135,7 +136,7 @@ func InitMsp(afab *AdaptorFabric) error  {
 	}
 	mspClient, err := msp.New(afab.Sdk.Context(), msp.WithOrg(afab.OrgName))
 	if err != nil {
-		fmt.Println("msp.New()", err.Error())
+		//fmt.Println("msp.New()", err.Error())
 		return err
 	}
 	afab.MspClient = mspClient
@@ -148,10 +149,28 @@ func getClientContext(afab *AdaptorFabric) (fab.ClientContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	providerFunc := afab.Sdk.Context(fabsdk.WithUser(afab.UserName))
+	//providerFunc := afab.Sdk.Context(fabsdk.WithUser(afab.UserName))
+	providerFunc := afab.Sdk.ContextZxl(fabsdk.WithUser(afab.UserName))
 	clientProvider,err := providerFunc()
 	if err != nil {
-		fmt.Println("providerFunc", err.Error())
+		//fmt.Println("providerFunc", err.Error())
+		return nil, err
+	}
+	if nil == clientProvider {
+		return nil, fmt.Errorf("clientProvider is nil")
+	}
+	return clientProvider, nil
+}
+func getClientContextNoUser(afab *AdaptorFabric) (fab.ClientContext, error) {
+	err := InitSDK(afab)
+	if err != nil {
+		return nil, err
+	}
+	providerFunc := afab.Sdk.Context(fabsdk.WithUser(afab.UserName))
+	//providerFunc := afab.Sdk.ContextZxl(fabsdk.WithUser(afab.UserName))
+	clientProvider,err := providerFunc()
+	if err != nil {
+		//fmt.Println("providerFunc", err.Error())
 		return nil, err
 	}
 	if nil == clientProvider {
@@ -184,7 +203,7 @@ func (afab *AdaptorFabric) GetPalletOneMappingAddress(addrInput *adaptor.GetPall
 
 //HashMessage have implement
 func (afab *AdaptorFabric) HashMessage(input *adaptor.HashMessageInput) (*adaptor.HashMessageOutput, error) {
-	clientContext, err := getClientContext(afab)
+	clientContext, err := getClientContextNoUser(afab)
 	if err != nil {
 		return nil, err
 	}
@@ -194,10 +213,10 @@ func (afab *AdaptorFabric) HashMessage(input *adaptor.HashMessageInput) (*adapto
 	}
 	hash,err := ctxCryptoSuite.Hash(input.Message, cryptosuite.GetSHA256Opts())
 	if err != nil {
-		fmt.Println("ctxCryptoSuite.Hash()", err.Error())
+		//fmt.Println("ctxCryptoSuite.Hash()", err.Error())
 		return nil, err
 	}
-	fmt.Println("hash", hex.EncodeToString(hash))
+	//fmt.Println("hash", hex.EncodeToString(hash))
 
 	var output adaptor.HashMessageOutput
 	output.Hash = hash
@@ -241,13 +260,12 @@ func (afab *AdaptorFabric) SignMessage(input *adaptor.SignMessageInput) (
 		fmt.Println("identifier is nil")
 	}
 	sig,err := clientContext.SigningManager().Sign(input.Message,
-		clientContext.PrivateKey())//Zxl todo panic not fix
+		clientContext.PrivateKey())//Zxl panic has fix
 	if err != nil {
-		fmt.Println("clientContext.Sign()", err.Error())
+		//fmt.Println("clientContext.Sign()", err.Error())
 		return nil, err
 	}
-
-	fmt.Println("sig", hex.EncodeToString(sig))
+	//fmt.Println("sig", hex.EncodeToString(sig))
 
 	var output adaptor.SignMessageOutput
 	output.Signature = sig
@@ -273,13 +291,13 @@ func (afab *AdaptorFabric) VerifySignature(input *adaptor.VerifySignatureInput) 
 	ctxCryptoSuite := clientContext.CryptoSuite()
 	hash,err := ctxCryptoSuite.Hash(input.Message, cryptosuite.GetSHA256Opts())
 	if err != nil {
-		fmt.Println("ctxCryptoSuite.Hash()", err.Error())
+		//fmt.Println("ctxCryptoSuite.Hash()", err.Error())
 		return nil, err
 	}
 	valid,err := ctxCryptoSuite.Verify(clientContext.PrivateKey(), input.Signature,
 		hash, nil)
 	if err != nil {
-		fmt.Println("ctxCryptoSuite.Verify()", err.Error())
+		//fmt.Println("ctxCryptoSuite.Verify()", err.Error())
 		output.Pass = false
 	} else {
 		output.Pass = valid
@@ -302,13 +320,13 @@ func (afab *AdaptorFabric) SignTransaction(input *adaptor.SignTransactionInput) 
 	}
 	processProposalRequest, err := txn.SignProposal(ctx, &proposal)
 	if err != nil {
-		fmt.Println("txn.SignProposal", err.Error())
+		//fmt.Println("txn.SignProposal", err.Error())
 		return nil, err
 	}
 
 	resultJSON, err := json.Marshal(*processProposalRequest)
 	if err != nil {
-		fmt.Println("json.Marshal(processProposalRequest)", err.Error())
+		//fmt.Println("json.Marshal(processProposalRequest)", err.Error())
 		return nil, err
 	}
 
@@ -349,14 +367,14 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			if err != nil {
 				return nil, err
 			}
-			result, txID, err := afab.ResClient.InstallCCBroadcastZxl(&processProposalRequest)
+			_, txID, err := afab.ResClient.InstallCCBroadcastZxl(&processProposalRequest)
 			if err != nil {
-				fmt.Println("ResClient.InstallCCBroadcastZxl", err.Error())
+				//fmt.Println("ResClient.InstallCCBroadcastZxl", err.Error())
 				return nil, err
 			}
 			//fmt.Println(len(rspArr))
-			fmt.Println(result)
-			fmt.Println("SendTransaction return", txID)
+			//fmt.Println(result)
+			//fmt.Println("SendTransaction return", txID)
 
 			var output adaptor.SendTransactionOutput // todo
 			output.TxID = []byte(txID)
@@ -373,7 +391,7 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			}
 			txID, err := afab.ResClient.InstantiateCCBroadcasZxl(afab.ChannelID, &processProposalRequest)
 			if err != nil {
-				fmt.Println("ResClient.Broadcast", err.Error())
+				//fmt.Println("ResClient.Broadcast", err.Error())
 				return nil, err
 			}
 			var output adaptor.SendTransactionOutput // todo
@@ -397,7 +415,7 @@ func (afab *AdaptorFabric) SendTransaction(input *adaptor.SendTransactionInput) 
 			}
 			resp, err := afab.ChannelClient.ExecuteBrocadcastZxl(req)
 			if err != nil {
-				fmt.Println("ResClient.ExecuteBrocadcastFirstZxl", err.Error())
+				//fmt.Println("ResClient.ExecuteBrocadcastFirstZxl", err.Error())
 				return nil, err
 			}
 			var output adaptor.SendTransactionOutput // todo
@@ -429,24 +447,24 @@ func (afab *AdaptorFabric) GetBlockInfo(input *adaptor.GetBlockInfoInput) (*adap
 	if input.Latest {
 		rsp, err := afab.LedgerClient.QueryInfo()
 		if err != nil {
-			fmt.Println(err.Error())
+			//fmt.Println(err.Error())
 			return nil, err
 		}
 		if rsp == nil {
-			fmt.Println("rsp is nil")
+			//fmt.Println("rsp is nil")
 			return nil, fmt.Errorf("LedgerClient.QueryInfo response is nil")
 		}
-		fmt.Println("rsp.Status", rsp.Status, "rsp.Endorser", rsp.Endorser)
+		//fmt.Println("rsp.Status", rsp.Status, "rsp.Endorser", rsp.Endorser)
 		if rsp.BCI != nil {
-			fmt.Println("rsp.BCI.Height", rsp.BCI.Height)
-			fmt.Println("rsp.BCI.CurrentBlockHash", hex.EncodeToString(rsp.BCI.CurrentBlockHash))
-			fmt.Println("rsp.BCI.PreviousBlockHash", hex.EncodeToString(rsp.BCI.PreviousBlockHash))
+			//fmt.Println("rsp.BCI.Height", rsp.BCI.Height)
+			//fmt.Println("rsp.BCI.CurrentBlockHash", hex.EncodeToString(rsp.BCI.CurrentBlockHash))
+			//fmt.Println("rsp.BCI.PreviousBlockHash", hex.EncodeToString(rsp.BCI.PreviousBlockHash))
 			output.Block.IsStable = false //todo
 			output.Block.BlockHeight = uint(rsp.BCI.Height)
 			output.Block.BlockID = rsp.BCI.CurrentBlockHash
 			output.Block.ParentBlockID = rsp.BCI.PreviousBlockHash
 		} else {
-			fmt.Println("rsp.BCI is nil")
+			//fmt.Println("rsp.BCI is nil")
 			return nil, fmt.Errorf("LedgerClient.QueryInfo response.BCI is ni")
 		}
 	} else {
@@ -457,19 +475,19 @@ func (afab *AdaptorFabric) GetBlockInfo(input *adaptor.GetBlockInfoInput) (*adap
 			rsp, err = afab.LedgerClient.QueryBlock(input.Height)
 		}
 		if err != nil {
-			fmt.Println(err.Error())
+			//fmt.Println(err.Error())
 			return nil, err
 		}
 		if nil == rsp {
-			fmt.Println("rsp is nil")
+			//fmt.Println("rsp is nil")
 			return nil, fmt.Errorf("LedgerClient.QueryBlock response is nil")
 		} else if nil == rsp.Header {
-			fmt.Println("rsp.Header is nil")
+			//fmt.Println("rsp.Header is nil")
 			return nil, fmt.Errorf("LedgerClient.QueryBlock response.Header is nil")
 		} else {
-			fmt.Println("rsp.Header.Number", rsp.Header.Number)
-			fmt.Println("rsp.Header.DataHash", hex.EncodeToString(rsp.Header.DataHash))
-			fmt.Println("rsp.Header.PreviousHash", hex.EncodeToString(rsp.Header.PreviousHash))
+			//fmt.Println("rsp.Header.Number", rsp.Header.Number)
+			//fmt.Println("rsp.Header.DataHash", hex.EncodeToString(rsp.Header.DataHash))
+			//fmt.Println("rsp.Header.PreviousHash", hex.EncodeToString(rsp.Header.PreviousHash))
 			output.Block.IsStable = false //todo
 			output.Block.BlockHeight = uint(rsp.Header.Number)
 			output.Block.BlockID = rsp.Header.DataHash //todo
@@ -535,10 +553,10 @@ func (afab *AdaptorFabric) CreateContractInstallTx(input *adaptor.CreateContract
 	//创建请求之前,需要使用 gopackager.NewCCPackage 方法生成一个resource.CCPackage 对象,传递两个参数,一个是链码的路径(相对于工程的路径), 一个是GOPATH的路径.
 	ccp, err := gopackager.NewCCPackage(string(input.Extra), afab.EnvGoPath)
 	if err != nil {
-		fmt.Println(err.Error())
+		//fmt.Println(err.Error())
 		return nil, err
 	}
-	fmt.Println("435", afab.EnvGoPath, string(input.Extra))
+	//fmt.Println("435", afab.EnvGoPath, string(input.Extra))
 	//安装链码之前需要创建请求
 	installCCRequest := resmgmt.InstallCCRequest{
 		Name:string(input.Contract),//链码名称
@@ -550,16 +568,16 @@ func (afab *AdaptorFabric) CreateContractInstallTx(input *adaptor.CreateContract
 	//result, err := afab.ResClient.InstallCC(installCCRequest)
 	result, err := afab.ResClient.InstallCCZxl(installCCRequest)
 	if err != nil {
-		fmt.Println("ResClient.InstallCCZxl", err.Error())
+		//fmt.Println("ResClient.InstallCCZxl", err.Error())
 		return nil, err
 	}
 	//fmt.Println(len(rspArr))
-	fmt.Println(result)
+	//fmt.Println(result)
 	//fmt.Println("InstallCC return", result.TxnID)
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		fmt.Println("json.Marshal(result)", err.Error())
+		//fmt.Println("json.Marshal(result)", err.Error())
 		return nil, err
 	}
 	var output adaptor.CreateContractInstallTxOutput // todo
@@ -604,15 +622,15 @@ func (afab *AdaptorFabric) CreateContractInitialTx(input *adaptor.CreateContract
 	//result,err := afab.ResClient.InstantiateCC(afab.ChannelID, req)
 	result,err := afab.ResClient.InstantiateCCCreateInitZxl(afab.ChannelID, req)
 	if err != nil {
-		fmt.Println("resClient.InstantiateCC",err.Error())
+		//fmt.Println("resClient.InstantiateCC",err.Error())
 		return nil, err
 	}
 	//fmt.Println("InstantiateCC return", result.TransactionID)
-	fmt.Println("InstantiateCC return", result.TxnID)
+	//fmt.Println("InstantiateCC return", result.TxnID)
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		fmt.Println("json.Marshal(result)", err.Error())
+		//fmt.Println("json.Marshal(result)", err.Error())
 		return nil, err
 	}
 	var output adaptor.CreateContractInitialTxOutput // todo
@@ -649,17 +667,17 @@ func (afab *AdaptorFabric) CreateContractInvokeTx(input *adaptor.CreateContractI
 	//rsp, err := afab.ChannelClient.Execute(req)
 	rsp, err := afab.ChannelClient.ExecuteZxl(req)
 	if err != nil {
-		fmt.Println(err.Error())
+		//fmt.Println(err.Error())
 		return nil, err
 	}
-	fmt.Println("Execute retrun", rsp.TransactionID)
+	//fmt.Println("Execute retrun", rsp.TransactionID)
 
 	if nil == rsp.Proposal {
 		return nil, fmt.Errorf("CreateContractInvokeTx failed")
 	}
 	resultJSON, err := json.Marshal(rsp.Proposal)
 	if err != nil {
-		fmt.Println("json.Marshal(result)", err.Error())
+		//fmt.Println("json.Marshal(result)", err.Error())
 		return nil, err
 	}
 	var output adaptor.CreateContractInvokeTxOutput // todo
@@ -680,31 +698,32 @@ func (afab *AdaptorFabric) GetContractInvokeTx(input *adaptor.GetContractInvokeT
 	}
 	rsp,err := afab.LedgerClient.QueryTransaction(fab.TransactionID(hex.EncodeToString(input.TxID)))
 	if err != nil {
-		fmt.Println(err.Error())
+		//fmt.Println(err.Error())
 		return nil, err
 	}
 	if rsp == nil{
-		fmt.Println("rsp is nil")
+		//fmt.Println("rsp is nil")
 		return nil, err
 	}
-	fmt.Println("rsp.ValidationCode",rsp.ValidationCode)
+	//fmt.Println("rsp.ValidationCode",rsp.ValidationCode)
 	var output adaptor.GetContractInvokeTxOutput
-	if rsp.TransactionEnvelope != nil{
-		txDetails, err := GetTransactionInfo(rsp)
-		if err != nil {
-			fmt.Println("GetTransactionInfoFromData failed", err.Error())
-			return nil, err
-		}
-		fmt.Println("txDetails.TransactionId", txDetails.TransactionId)
-		fmt.Println("txDetails.Args", txDetails.Args)
-		txID,_ := hex.DecodeString(string(txDetails.TransactionId))
-		output.TxID = txID
-		output.TargetAddress = txDetails.ChaincodeID
-		argsJSON,_:=json.Marshal(txDetails.Args)
-		output.TxRawData = argsJSON
-	}else {
-		fmt.Println("rsp.TransactionEnvelope is nil")
+	if rsp.TransactionEnvelope == nil{
+		//fmt.Println("rsp.TransactionEnvelope is nil")
+		return nil, fmt.Errorf("rsp.TransactionEnvelope is nil")
 	}
+	txDetails, err := GetTransactionInfo(rsp)
+	if err != nil {
+		//fmt.Println("GetTransactionInfoFromData failed", err.Error())
+		return nil, err
+	}
+	//fmt.Println("txDetails.TransactionId", txDetails.TransactionId)
+	//fmt.Println("txDetails.Args", txDetails.Args)
+	txID,_ := hex.DecodeString(string(txDetails.TransactionId))
+	output.TxID = txID
+	output.TargetAddress = txDetails.ChaincodeID
+	argsJSON,_:=json.Marshal(txDetails.Args)
+	output.TxRawData = argsJSON
+
 	if 200 == rsp.ValidationCode {
 		output.IsSuccess = true
 	} else {
@@ -738,10 +757,10 @@ func (afab *AdaptorFabric) QueryContract(input *adaptor.QueryContractInput) (
 	}
 	resp, err := afab.ChannelClient.Query(reqQuery)
 	if err != nil {
-		fmt.Println("channelClient.Query",err.Error())
+		//fmt.Println("channelClient.Query",err.Error())
 		return nil, err
 	}
-	fmt.Println(resp.TransactionID)
+	//fmt.Println(resp.TransactionID)
 	//fmt.Println(string(resp.Payload))
 
 	var output adaptor.QueryContractOutput

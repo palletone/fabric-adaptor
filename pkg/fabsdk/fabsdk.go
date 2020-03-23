@@ -375,6 +375,18 @@ func (sdk *FabricSDK) Context(options ...ContextOption) contextApi.ClientProvide
 
 	return clientProvider
 }
+func (sdk *FabricSDK) ContextZxl(options ...ContextOption) contextApi.ClientProvider {
+
+	clientProvider := func() (contextApi.Client, error) {
+		identity, err := sdk.newIdentity(options...)
+		if err != nil {
+			return nil, err
+		}
+		return &context.Client{Providers: sdk.provider, SigningIdentity: identity}, err
+	}
+
+	return clientProvider
+}
 
 //ChannelContext creates and returns channel context
 func (sdk *FabricSDK) ChannelContext(channelID string, options ...ContextOption) contextApi.ChannelProvider {

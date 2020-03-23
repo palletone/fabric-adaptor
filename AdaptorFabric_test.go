@@ -39,14 +39,14 @@ func TestHashMessage(t *testing.T) {
 
 func TestSignMessage(t *testing.T) {
 	fabAdapotr := NewAdaptorFabric("./connection.yaml")
-	fabAdapotr.UserName = "User1"//if empty,panic. not fix
+	fabAdapotr.UserName = "User1"//need set
 	output,err := fabAdapotr.SignMessage(&adaptor.SignMessageInput{Message:[]byte("123456")})
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 	//30440220742c2cc005742c2d378634e1662f6604690879c4c45c107ed8e9f2c8fb594334022042ef319f4b0f6e2931e8f74de08c5edad2392c32c8269c4b7f3c42b5919507af
-	fmt.Println("output.Hash", hex.EncodeToString(output.Signature))
+	fmt.Println("output.Signature", hex.EncodeToString(output.Signature))
 }
 
 func TestSignTransaction(t *testing.T) {
@@ -267,7 +267,7 @@ func TestCreateContractInitialTx(t *testing.T) {
 	fabAdapotr := NewAdaptorFabric("./connection.yaml")
 	fabAdapotr.UserName = "User1"
 	fabAdapotr.ChannelID = "mychannel"//sdk check
-	fabAdapotr.OrgAdmin = "Admin"//if empty,panic. not fix
+	fabAdapotr.OrgAdmin = "Admin"//need set
 	fabAdapotr.OrgName = "org1"
 	fabAdapotr.OrgID = "Org1MSP" //不能为空,否则合约实例化后不能调用
 	output,err := fabAdapotr.CreateContractInitialTx(&adaptor.CreateContractInitialTxInput{
@@ -301,15 +301,7 @@ func TestGetContractInvokeTx(t *testing.T) {
 	fabAdapotr := NewAdaptorFabric("./connection.yaml")
 	fabAdapotr.UserName = "User1"
 	fabAdapotr.ChannelID = "mychannel"//sdk check
-	//txIDHex := "cebeb55a288fbaaaaa85e541adeec49bd5ff50be7d6a7149d867bf5dfb18b88a"
-	txIDHex := "27c95ae047f5f4b386276976e4de2db18d193913a4fc170f3039e980d8c20fc2"
-	//txIDHex := "827f5c57900c3145e50cd3b5c1d6301611141106927653e141ab22cf635fb7e9"
-	//txIDHex := "6128d4d974d1010ed87decd75558aa4b0101ed2362cb477ab86ae53867b710ab"
-	//txIDHex := "d06606858fc523bc4f66a6e5583836b7ffc3bd6100db31565dd7f63cbcfd6eae"
-	//txIDHex := "1aa51de17f45ad80386edfdba40187d7bc7a34f17aa64d630a1f92144db76b1a"
-	//txIDHex := "3b3099020f4ad60be08e552852d2b175d7f4988150c025d7288e1bed1ed3b58c"
-	//txIDHex := "d606d16a62221a3ac1279208219a50e3fa36610bcaf99ca1ab6f934e4c72a261"
-	//txIDHex := "701dbf13b4859d901b771d8e47862fb5a51d97fff2963d804c26587446d79258"
+	txIDHex := "e0653486b644de14f853f36f0f89801d510864a0079ea68d1551c53315e920dc"//deploy
 	txID, _ := hex.DecodeString(txIDHex)
 	output,err := fabAdapotr.GetContractInvokeTx(&adaptor.GetContractInvokeTxInput{TxID:txID})
 	if err != nil {
