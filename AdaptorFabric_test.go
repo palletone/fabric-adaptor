@@ -145,8 +145,10 @@ func TestContractInstall(t *testing.T) {
 	fabAdapotr.OrgID = "Org1MSP" //不能为空,否则合约实例化后不能调用
 
 	//create tx
-	outputInstallTx,err := fabAdapotr.CreateContractInstallTx(&adaptor.CreateContractInstallTxInput{
-		Contract:[]byte("fabcar_xl17"),Extra:[]byte("github.com/fabcar_xl")})
+	outputInstallTx,err := fabAdapotr.CreateContractInstallTx(
+		&adaptor.CreateContractInstallTxInput{
+		Contract:[]byte("chaincode_example02xl4"),
+		Extra:[]byte("github.com/chaincode_example02")})
 	if err != nil {
 		fmt.Println("fabAdapotr.CreateContractInstallTx", err.Error())
 		return
@@ -186,9 +188,16 @@ func TestContractInitial(t *testing.T) {
 	fabAdapotr.OrgAdmin = "Admin"
 	fabAdapotr.OrgName = "org1"
 	fabAdapotr.OrgID = "Org1MSP" //不能为空,否则合约实例化后不能调用
+
+	args := [][]byte{[]byte("init"),[]byte("A"),[]byte("100000"),
+		[]byte("B"), []byte("1000")}
 	//Must after ContractInstall success
-	outputInitialTx,err := fabAdapotr.CreateContractInitialTx(&adaptor.CreateContractInitialTxInput{
-		Contract:[]byte("fabcar_xl17"),Extra:[]byte("github.com/fabcar_xl")})
+	outputInitialTx,err := fabAdapotr.CreateContractInitialTx(
+		&adaptor.CreateContractInitialTxInput{
+			Contract:[]byte("chaincode_example02xl4"),
+			Extra:[]byte("github.com/chaincode_example02"),
+			Args:args,
+		})
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -229,10 +238,11 @@ func TestContractInvoke(t *testing.T) {
 	fabAdapotr.OrgAdmin = "Admin"
 	fabAdapotr.OrgName = "org1"
 
-	args := [][]byte{[]byte("CAR16"),[]byte("zxl"), []byte("xiangli"), []byte("red"), []byte("zhang")}
+	args := [][]byte{[]byte("A"),[]byte("B"), []byte("100")}
 	outputInvokeTx,err := fabAdapotr.CreateContractInvokeTx(
 		&adaptor.CreateContractInvokeTxInput{
-		ContractAddress:"fabcar_xl15",Function:"createCar",Args:args})
+			ContractAddress:"chaincode_example02xl4",
+			Function:"invoke",Args:args})
 	if err != nil {
 		fmt.Println("CreateContractInvokeTx", err.Error())
 		return
@@ -301,7 +311,9 @@ func TestGetContractInvokeTx(t *testing.T) {
 	fabAdapotr := NewAdaptorFabric("./connection.yaml")
 	fabAdapotr.UserName = "User1"
 	fabAdapotr.ChannelID = "mychannel"//sdk check
-	txIDHex := "e0653486b644de14f853f36f0f89801d510864a0079ea68d1551c53315e920dc"//deploy
+	txIDHex := "69f0a68e061699bd9828e01a6658e7f6c6eba4ff772df1fc7e098230bbc5383f"//invoke
+	//txIDHex := "970d37f8095af69e1ddbd8d4d519ff27f18b9674e8cf202eacd02f0b21b3223d"//deploy
+	//txIDHex := "e0653486b644de14f853f36f0f89801d510864a0079ea68d1551c53315e920dc"//deploy
 	txID, _ := hex.DecodeString(txIDHex)
 	output,err := fabAdapotr.GetContractInvokeTx(&adaptor.GetContractInvokeTxInput{TxID:txID})
 	if err != nil {
@@ -315,8 +327,12 @@ func TestQueryContract(t *testing.T) {
 	fabAdapotr := NewAdaptorFabric("./connection.yaml")
 	fabAdapotr.UserName = "User1"
 	fabAdapotr.ChannelID = "mychannel"//sdk check
-	output,err := fabAdapotr.QueryContract(&adaptor.QueryContractInput{
-		ContractAddress:"fabcar_xl15",Function:"queryAllCars"})
+	output,err := fabAdapotr.QueryContract(
+		&adaptor.QueryContractInput{
+		ContractAddress:"chaincode_example02xl4",
+		Function:"query",
+		Args:[][]byte{[]byte("A")},
+		})
 	if err != nil {
 		fmt.Println(err.Error())
 		return

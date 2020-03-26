@@ -29,7 +29,6 @@ import (
 	"github.com/palletone/fabric-adaptor/pkg/client/msp"
 	"github.com/palletone/fabric-adaptor/pkg/client/resmgmt"
 	"github.com/palletone/fabric-adaptor/pkg/common/providers/fab"
-	pmsp "github.com/palletone/fabric-adaptor/pkg/common/providers/msp"
 	"github.com/palletone/fabric-adaptor/pkg/context"
 	"github.com/palletone/fabric-adaptor/pkg/core/config"
 	"github.com/palletone/fabric-adaptor/pkg/core/cryptosuite"
@@ -226,39 +225,11 @@ func (afab *AdaptorFabric) HashMessage(input *adaptor.HashMessageInput) (*adapto
 //对一条消息进行签名 //SignMessage have implement
 func (afab *AdaptorFabric) SignMessage(input *adaptor.SignMessageInput) (
 	*adaptor.SignMessageOutput, error) {
-	//err := InitSDK(afab)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//err = InitMsp(afab)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//sigIdentity,err := afab.MspClient.GetSigningIdentity(afab.UserName)
-	//if err != nil {
-	//	fmt.Println("mspClient.GetSigningIdentity()", err.Error())
-	//	return nil, err
-	//}
-	//
-	//sig,err := sigIdentity.Sign(input.Message)
-	//if err != nil {
-	//	fmt.Println("clientContext.Sign()", err.Error())
-	//	return nil, err
-	//}
-
 	clientContext, err := getClientContext(afab)
 	if err != nil {
 		return nil, err
 	}
-	//sig,err := clientContext.Sign(input.Message)
-	//if err != nil {
-	//	fmt.Println("clientContext.Sign()", err.Error())
-	//	return nil, err
-	//}
-	identifier := clientContext.(pmsp.Identity) // todo
-	if pmsp.Identity(nil) == identifier {
-		fmt.Println("identifier is nil")
-	}
+
 	sig,err := clientContext.SigningManager().Sign(input.Message,
 		clientContext.PrivateKey())//Zxl panic has fix
 	if err != nil {
