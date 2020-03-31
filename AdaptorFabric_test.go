@@ -249,7 +249,7 @@ func TestContractInvoke(t *testing.T) {
 	}
 	fmt.Println("len", len(outputInvokeTx.RawTransaction))
 	fmt.Println(hex.EncodeToString(outputInvokeTx.RawTransaction))
-
+	fmt.Println(string(outputInvokeTx.Extra))
 	//sign tx
 	outputSign,err := fabAdapotr.SignTransaction(&adaptor.SignTransactionInput{
 		PrivateKey:[]byte(fabAdapotr.UserName),
@@ -321,6 +321,7 @@ func TestGetContractInvokeTx(t *testing.T) {
 		return
 	}
 	fmt.Println(string(output.TxRawData))
+	fmt.Println(output.IsSuccess)
 }
 
 func TestQueryContract(t *testing.T) {
@@ -331,7 +332,7 @@ func TestQueryContract(t *testing.T) {
 		&adaptor.QueryContractInput{
 		ContractAddress:"chaincode_example02xl4",
 		Function:"query",
-		Args:[][]byte{[]byte("A")},
+		Args:[][]byte{[]byte("B")},
 		})
 	if err != nil {
 		fmt.Println(err.Error())
